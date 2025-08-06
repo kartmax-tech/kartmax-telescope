@@ -71,47 +71,47 @@
                         data-toggle="dropdown" 
                         aria-haspopup="true" 
                         aria-expanded="false"
-                        :class="{'btn-primary': selectedService}">
+                        v-bind:class="{'btn-primary': selectedService}">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" class="icon mr-2" fill="currentColor">
                         <path fill-rule="evenodd" d="M4.25 2A2.25 2.25 0 002 4.25v2.5A2.25 2.25 0 004.25 9h2.5A2.25 2.25 0 009 6.75v-2.5A2.25 2.25 0 006.75 2h-2.5zm0 9A2.25 2.25 0 002 13.25v2.5A2.25 2.25 0 004.25 18h2.5A2.25 2.25 0 009 15.75v-2.5A2.25 2.25 0 006.75 11h-2.5zm9-9A2.25 2.25 0 0011 4.25v2.5A2.25 2.25 0 0013.25 9h2.5A2.25 2.25 0 0018 6.75v-2.5A2.25 2.25 0 0015.75 2h-2.5zm0 9A2.25 2.25 0 0011 13.25v2.5A2.25 2.25 0 0013.25 18h2.5A2.25 2.25 0 0018 15.75v-2.5A2.25 2.25 0 0015.75 11h-2.5z" clip-rule="evenodd" />
                     </svg>
-                    {{ selectedService || 'Builder' }}
+                    <span v-text="selectedService || 'Builder'"></span>
                 </button>
                 <div class="dropdown-menu dropdown-menu-right" aria-labelledby="serviceDropdown">
                     <a class="dropdown-item" 
                        href="#" 
-                       @click.prevent="selectService('builder')"
-                       :class="{'active': selectedService === 'builder'}">
+                       v-on:click.prevent="selectService('builder')"
+                       v-bind:class="{'active': selectedService === 'builder'}">
                         Builder
                     </a>
                     <a class="dropdown-item" 
                        href="#" 
-                       @click.prevent="selectService('search')"
-                       :class="{'active': selectedService === 'search'}">
+                       v-on:click.prevent="selectService('search')"
+                       v-bind:class="{'active': selectedService === 'search'}">
                         Search
                     </a>
                     <a class="dropdown-item" 
                        href="#" 
-                       @click.prevent="selectService('cart')"
-                       :class="{'active': selectedService === 'cart'}">
+                       v-on:click.prevent="selectService('cart')"
+                       v-bind:class="{'active': selectedService === 'cart'}">
                         Cart
                     </a>
                     <a class="dropdown-item" 
                        href="#" 
-                       @click.prevent="selectService('admin')"
-                       :class="{'active': selectedService === 'admin'}">
+                       v-on:click.prevent="selectService('admin')"
+                       v-bind:class="{'active': selectedService === 'admin'}">
                         Admin
                     </a>
                     <a class="dropdown-item" 
                        href="#" 
-                       @click.prevent="selectService('user')"
-                       :class="{'active': selectedService === 'user'}">
+                       v-on:click.prevent="selectService('user')"
+                       v-bind:class="{'active': selectedService === 'user'}">
                         User
                     </a>
                     <a class="dropdown-item" 
                        href="#" 
-                       @click.prevent="selectService('b2b')"
-                       :class="{'active': selectedService === 'b2b'}">
+                       v-on:click.prevent="selectService('b2b')"
+                       v-bind:class="{'active': selectedService === 'b2b'}">
                         B2B
                     </a>
                 </div>
