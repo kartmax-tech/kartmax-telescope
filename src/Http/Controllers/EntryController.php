@@ -52,9 +52,15 @@ abstract class EntryController extends Controller
     {
         $entry = $storage->find($id)->generateAvatar();
 
+        // Get service from request for batch retrieval
+        $service = request()->query('service', 'builder'); // Default to 'builder' if not provided
+        $batchOptions = EntryQueryOptions::forBatchId($entry->batchId)
+            ->limit(-1)
+            ->serviceTag($service);
+
         return response()->json([
             'entry' => $entry,
-            'batch' => $storage->get(null, EntryQueryOptions::forBatchId($entry->batchId)->limit(-1)),
+            'batch' => $storage->get(null, $batchOptions),
         ]);
     }
 
