@@ -8,6 +8,7 @@
 </p>
 
 ## Introduction
+
 KartmnaX Telescope is an elegant debug assistant for the Laravel framework, building on the original Laravel Telescope. In addition to all the features of Telescope, KartmnaX Telescope introduces support for S3 storage and enhanced environment-based configuration, making it suitable for distributed and cloud-native environments.
 
 <p align="center">
