@@ -49,6 +49,20 @@ class EntryQueryOptions
     public $limit = 50;
 
     /**
+     * The service tag to filter entries by.
+     *
+     * @var string
+     */
+    public $serviceTag;
+
+    /**
+     * The time range in minutes to scan for entries.
+     *
+     * @var int
+     */
+    public $timeRange;
+
+    /**
      * Create new entry query options from the incoming request.
      *
      * @param  \Illuminate\Http\Request  $request
@@ -62,6 +76,8 @@ class EntryQueryOptions
                 ->beforeSequence($request->before)
                 ->tag($request->tag)
                 ->familyHash($request->family_hash)
+                ->serviceTag($request->service)
+                ->timeRange($request->time_range)
                 ->limit($request->take ?? 50);
     }
 
@@ -150,6 +166,32 @@ class EntryQueryOptions
     public function limit(int $limit)
     {
         $this->limit = $limit;
+
+        return $this;
+    }
+
+    /**
+     * Set the service tag to filter entries by.
+     *
+     * @param  string  $serviceTag
+     * @return $this
+     */
+    public function serviceTag(?string $serviceTag)
+    {
+        $this->serviceTag = $serviceTag;
+
+        return $this;
+    }
+
+    /**
+     * Set the time range in minutes to scan for entries.
+     *
+     * @param  int  $timeRange
+     * @return $this
+     */
+    public function timeRange(?int $timeRange)
+    {
+        $this->timeRange = $timeRange;
 
         return $this;
     }

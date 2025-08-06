@@ -45,10 +45,31 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
         ]);
     }
 
-    protected function entryPath($type, $batchId, $uuid)
+    protected function getServiceTag($entry = null)
     {
-        $date = now()->format('Y-m-d');
-        return "{$this->directory}/{$type}/{$date}/{$batchId}/{$uuid}.json";
+        // Get from entry tags if available
+        if ($entry && isset($entry->tags)) {
+            $staticTag = config('telescope.custom_static_tag');
+            foreach ($entry->tags as $tag) {
+                if (strpos($tag, $staticTag . ':') === 0) {
+                    return str_replace($staticTag . ':', '', $tag);
+                }
+            }
+        }
+        
+        // Fallback to config or default
+        return config('telescope.custom_static_tag', 'default-service');
+    }
+
+    protected function entryPath($type, $batchId, $uuid, $entry = null)
+    {
+        $now = now();
+        $serviceTag = $this->getServiceTag($entry);
+        $date = $now->format('Y-m-d');
+        $hour = $now->format('H');
+        $minute = $now->format('i');
+        
+        return "{$this->directory}/{$type}/{$serviceTag}/{$date}/{$hour}/{$minute}/{$uuid}.json";
     }
 
     public function store(Collection $entries)
@@ -58,13 +79,18 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
         }
 
         foreach ($entries as $entry) {
-            $filePath = $this->entryPath($entry->type, $entry->batchId, $entry->uuid);
+            // Pass the entry to entryPath to extract service tag
+            $filePath = $this->entryPath($entry->type, $entry->batchId, $entry->uuid, $entry);
+            
+            // Add service tag to entry data
+            $serviceTag = $this->getServiceTag($entry);
             
             // Build complete entry data
             $entryData = [
                 'uuid' => $entry->uuid,
                 'batch_id' => $entry->batchId,
                 'type' => $entry->type,
+                'service_tag' => $serviceTag,
                 'family_hash' => $entry->familyHash,
                 'content' => $entry->content,
                 'created_at' => $entry->recordedAt->toISOString(),
@@ -89,6 +115,7 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
                 Log::warning('Failed to store Telescope entry', [
                     'error' => $e->getMessage(),
                     'entry_type' => $entry->type,
+                    'service_tag' => $serviceTag,
                     'uuid' => $entry->uuid
                 ]);
             }
@@ -97,43 +124,49 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
 
     public function get($type, EntryQueryOptions $options)
     {
-        $results = collect();
-        $daysToCheck = 10; // Default to last 5 days
-        
-        // If specific batch_id is provided, optimize by looking in specific date folders
-        if ($options->batchId) {
-            $daysToCheck = 5;
+        // Require service to be specified - throw exception if missing
+        if (!isset($options->serviceTag) || empty($options->serviceTag)) {
+            throw new \InvalidArgumentException(
+                'Service selection required. Please select a service to view logs. ' .
+                'Available services can be configured via TELESCOPE_CUSTOM_STATIC_TAG environment variable.'
+            );
         }
 
-        // Get the date folders to check
-        $datesToCheck = collect(range(0, $daysToCheck - 1))
-            ->map(fn($daysAgo) => now()->subDays($daysAgo)->format('Y-m-d'));
+        $results = collect();
+        $serviceTag = $options->serviceTag;
+        
+        // Determine time range to scan (default: last 30 minutes for real-time viewing)
+        $minutesToScan = $options->timeRange ?? 30;
+        $timeSlots = collect();
+        
+        for ($i = 0; $i < $minutesToScan; $i++) {
+            $time = now()->subMinutes($i);
+            $timeSlots->push([
+                'date' => $time->format('Y-m-d'),
+                'hour' => $time->format('H'),
+                'minute' => $time->format('i')
+            ]);
+        }
 
-        // Build the base path
-        $basePath = $type ? "{$this->directory}/{$type}" : $this->directory;
+        // Build the base path with service tag
+        $basePath = "{$this->directory}/{$type}/{$serviceTag}";
 
-        foreach ($datesToCheck as $date) {
+        foreach ($timeSlots as $timeSlot) {
             // If we have enough results, break early
             if ($results->count() >= $options->limit) {
                 break;
             }
 
-            $datePath = $type ? "{$basePath}/{$date}" : $date;
+            $timePath = "{$basePath}/{$timeSlot['date']}/{$timeSlot['hour']}/{$timeSlot['minute']}";
 
             try {
-                // Optimize path if we have a batch_id
-                if ($options->batchId) {
-                    $batchPath = "{$datePath}/{$options->batchId}";
-                    if (!Storage::disk($this->disk)->exists($batchPath)) {
-                        continue;
-                    }
-                    $files = Storage::disk($this->disk)->allFiles($batchPath);
-                } else {
-                    // List files for this date
-                    $files = Storage::disk($this->disk)->allFiles($datePath);
+                if (!Storage::disk($this->disk)->exists($timePath)) {
+                    continue;
                 }
 
-                // Process files for this date
+                $files = Storage::disk($this->disk)->allFiles($timePath);
+
+                // Process files for this time slot
                 foreach ($files as $file) {
                     if (!str_ends_with($file, '.json')) {
                         continue;
@@ -151,8 +184,9 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
                 }
             } catch (\Exception $e) {
                 Log::warning('Failed to retrieve Telescope entries', [
-                    'date' => $date,
+                    'time_path' => $timePath,
                     'type' => $type,
+                    'service_tag' => $serviceTag,
                     'error' => $e->getMessage()
                 ]);
                 continue;
