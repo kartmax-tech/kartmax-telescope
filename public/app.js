@@ -4982,7 +4982,18 @@ function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length)
       selectedService: '',
       showServiceSelector: false,
       serviceSelectionRequired: false,
-      staticServices: ['builder', 'search', 'cart', 'admin', 'user', 'b2b']
+      staticServices: ['builder', 'search', 'cart', 'admin', 'user', 'b2b'],
+      // DateTime range selection
+      fromDateTime: '',
+      toDateTime: '',
+      showDateTimeSelector: false,
+      maxHourDuration: 1,
+      // Maximum 1 hour selection
+
+      // Request cancellation
+      loadEntriesCancelToken: null,
+      checkNewEntriesCancelToken: null,
+      updateEntriesCancelToken: null
     };
   },
   /**
@@ -4994,6 +5005,10 @@ function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length)
     this.familyHash = this.$route.query.family_hash || '';
     this.tag = this.$route.query.tag || '';
     this.selectedService = this.$route.query.service || this.getCurrentService();
+
+    // Initialize datetime range from URL params if present
+    this.fromDateTime = this.$route.query.from_datetime || '';
+    this.toDateTime = this.$route.query.to_datetime || '';
     this.loadEntries(function (entries) {
       _this.entries = entries;
       _this.checkForNewEntries();
@@ -5004,12 +5019,19 @@ function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length)
     this.focusOnSearch();
   },
   /**
+   * Clean before the component is destroyed.
+   */
+  beforeDestroy: function beforeDestroy() {
+    this.cancelAllRequests();
+  },
+  /**
    * Clean after the component is destroyed.
    */
   destroyed: function destroyed() {
     clearTimeout(this.newEntriesTimeout);
     clearTimeout(this.updateEntriesTimeout);
     clearTimeout(this.updateTimeAgoTimeout);
+    this.cancelAllRequests();
     document.onkeyup = null;
   },
   watch: {
@@ -5035,7 +5057,22 @@ function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length)
   methods: {
     loadEntries: function loadEntries(after) {
       var _this3 = this;
-      axios__WEBPACK_IMPORTED_MODULE_2__["default"].post(Telescope.basePath + '/telescope-api/' + this.resource + '?tag=' + this.tag + '&before=' + this.lastEntryIndex + '&take=' + this.entriesPerRequest + '&family_hash=' + this.familyHash + '&service=' + this.selectedService).then(function (response) {
+      // Cancel any existing loadEntries request
+      if (this.loadEntriesCancelToken) {
+        this.loadEntriesCancelToken.cancel('Operation cancelled due to new request');
+      }
+
+      // Create new cancel token
+      this.loadEntriesCancelToken = axios__WEBPACK_IMPORTED_MODULE_2__["default"].CancelToken.source();
+      var url = Telescope.basePath + '/telescope-api/' + this.resource + '?tag=' + this.tag + '&before=' + this.lastEntryIndex + '&take=' + this.entriesPerRequest + '&family_hash=' + this.familyHash + '&service=' + this.selectedService;
+
+      // Only add datetime parameters if they are set
+      if (this.fromDateTime && this.toDateTime) {
+        url += '&from_datetime=' + encodeURIComponent(this.fromDateTime) + '&to_datetime=' + encodeURIComponent(this.toDateTime);
+      }
+      axios__WEBPACK_IMPORTED_MODULE_2__["default"].post(url, {}, {
+        cancelToken: this.loadEntriesCancelToken.token
+      }).then(function (response) {
         _this3.lastEntryIndex = response.data.entries.length ? lodash__WEBPACK_IMPORTED_MODULE_1___default().last(response.data.entries).sequence : _this3.lastEntryIndex;
         _this3.hasMoreEntries = response.data.entries.length >= _this3.entriesPerRequest;
         _this3.recordingStatus = response.data.status;
@@ -5045,6 +5082,10 @@ function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length)
           }));
         }
       })["catch"](function (error) {
+        // Don't handle cancelled requests
+        if (axios__WEBPACK_IMPORTED_MODULE_2__["default"].isCancel(error)) {
+          return;
+        }
         if (error.response && error.response.status === 422) {
           // Service selection required
           _this3.serviceSelectionRequired = true;
@@ -5056,6 +5097,9 @@ function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length)
           _this3.$root.alert.type = 'error';
           _this3.$root.alert.message = ((_error$response = error.response) === null || _error$response === void 0 || (_error$response = _error$response.data) === null || _error$response === void 0 ? void 0 : _error$response.message) || 'An error occurred while loading entries.';
         }
+      })["finally"](function () {
+        // Clear the cancel token since request is complete
+        _this3.loadEntriesCancelToken = null;
       });
     },
     /**
@@ -5067,8 +5111,23 @@ function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length)
       if (this.serviceSelectionRequired || !this.selectedService) {
         return;
       }
+
+      // Don't poll for new entries when datetime filter is active (viewing historical data)
+      if (this.fromDateTime && this.toDateTime) {
+        return;
+      }
       this.newEntriesTimeout = setTimeout(function () {
-        axios__WEBPACK_IMPORTED_MODULE_2__["default"].post(Telescope.basePath + '/telescope-api/' + _this4.resource + '?tag=' + _this4.tag + '&take=1' + '&family_hash=' + _this4.familyHash + '&service=' + _this4.selectedService).then(function (response) {
+        // Cancel any existing checkNewEntries request
+        if (_this4.checkNewEntriesCancelToken) {
+          _this4.checkNewEntriesCancelToken.cancel('Operation cancelled due to new request');
+        }
+
+        // Create new cancel token
+        _this4.checkNewEntriesCancelToken = axios__WEBPACK_IMPORTED_MODULE_2__["default"].CancelToken.source();
+        var url = Telescope.basePath + '/telescope-api/' + _this4.resource + '?tag=' + _this4.tag + '&take=1' + '&family_hash=' + _this4.familyHash + '&service=' + _this4.selectedService;
+        axios__WEBPACK_IMPORTED_MODULE_2__["default"].post(url, {}, {
+          cancelToken: _this4.checkNewEntriesCancelToken.token
+        }).then(function (response) {
           if (!_this4._isDestroyed) {
             _this4.recordingStatus = response.data.status;
             if (response.data.entries.length && !_this4.entries.length) {
@@ -5083,6 +5142,19 @@ function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length)
               _this4.checkForNewEntries();
             }
           }
+        })["catch"](function (error) {
+          // Don't handle cancelled requests
+          if (axios__WEBPACK_IMPORTED_MODULE_2__["default"].isCancel(error)) {
+            return;
+          }
+
+          // Continue checking even if there's an error
+          if (!_this4._isDestroyed) {
+            _this4.checkForNewEntries();
+          }
+        })["finally"](function () {
+          // Clear the cancel token since request is complete
+          _this4.checkNewEntriesCancelToken = null;
         });
       }, this.newEntriesTimer);
     },
@@ -5153,8 +5225,17 @@ function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length)
           return entry.content.status === 'pending';
         }).map('id').value();
         if (uuids.length) {
+          // Cancel any existing updateEntries request
+          if (_this9.updateEntriesCancelToken) {
+            _this9.updateEntriesCancelToken.cancel('Operation cancelled due to new request');
+          }
+
+          // Create new cancel token
+          _this9.updateEntriesCancelToken = axios__WEBPACK_IMPORTED_MODULE_2__["default"].CancelToken.source();
           axios__WEBPACK_IMPORTED_MODULE_2__["default"].post(Telescope.basePath + '/telescope-api/' + _this9.resource, {
             uuids: uuids
+          }, {
+            cancelToken: _this9.updateEntriesCancelToken.token
           }).then(function (response) {
             _this9.recordingStatus = response.data.status;
             _this9.entries = lodash__WEBPACK_IMPORTED_MODULE_1___default().map(_this9.entries, function (entry) {
@@ -5163,6 +5244,15 @@ function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length)
                 id: entry.id
               });
             });
+          })["catch"](function (error) {
+            // Don't handle cancelled requests
+            if (axios__WEBPACK_IMPORTED_MODULE_2__["default"].isCancel(error)) {
+              return;
+            }
+            // Silently continue on error
+          })["finally"](function () {
+            // Clear the cancel token since request is complete
+            _this9.updateEntriesCancelToken = null;
           });
         }
         _this9.updateEntries();
@@ -5224,6 +5314,194 @@ function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length)
       this.showServiceSelector = false;
       if (!this.selectedService) {
         this.serviceSelectionRequired = true;
+      }
+    },
+    /**
+     * Round date to nearest 5-minute interval
+     */
+    roundToFiveMinutes: function roundToFiveMinutes(date) {
+      var roundedDate = new Date(date);
+      var minutes = roundedDate.getMinutes();
+      var roundedMinutes = Math.floor(minutes / 5) * 5;
+      roundedDate.setMinutes(roundedMinutes, 0, 0); // Set seconds and milliseconds to 0
+      return roundedDate;
+    },
+    /**
+     * Format date for datetime-local input
+     */
+    formatDateTimeLocal: function formatDateTimeLocal(date) {
+      var year = date.getFullYear();
+      var month = String(date.getMonth() + 1).padStart(2, '0');
+      var day = String(date.getDate()).padStart(2, '0');
+      var hours = String(date.getHours()).padStart(2, '0');
+      var minutes = String(date.getMinutes()).padStart(2, '0');
+      return "".concat(year, "-").concat(month, "-").concat(day, "T").concat(hours, ":").concat(minutes);
+    },
+    /**
+     * Toggle datetime selector visibility
+     */
+    toggleDateTimeSelector: function toggleDateTimeSelector() {
+      this.showDateTimeSelector = !this.showDateTimeSelector;
+
+      // If opening the selector and no datetime is set, populate with defaults
+      if (this.showDateTimeSelector && (!this.fromDateTime || !this.toDateTime)) {
+        this.setDefaultDateTimeRange();
+      }
+    },
+    /**
+     * Validate datetime range (max 1 hour, 5-minute intervals)
+     */
+    validateDateTimeRange: function validateDateTimeRange() {
+      if (!this.fromDateTime || !this.toDateTime) {
+        return false;
+      }
+      var fromDate = new Date(this.fromDateTime);
+      var toDate = new Date(this.toDateTime);
+
+      // Check if dates are aligned to 5-minute intervals
+      if (fromDate.getMinutes() % 5 !== 0 || fromDate.getSeconds() !== 0) {
+        alert('Start time must be aligned to 5-minute intervals (e.g., 10:00, 10:05, 10:10).');
+        return false;
+      }
+      if (toDate.getMinutes() % 5 !== 0 || toDate.getSeconds() !== 0) {
+        alert('End time must be aligned to 5-minute intervals (e.g., 10:00, 10:05, 10:10).');
+        return false;
+      }
+      var diffInHours = (toDate - fromDate) / (1000 * 60 * 60);
+      if (diffInHours > this.maxHourDuration) {
+        alert("Maximum time range is ".concat(this.maxHourDuration, " hour(s). Please select a shorter range."));
+        return false;
+      }
+      if (diffInHours <= 0) {
+        alert('End time must be after start time.');
+        return false;
+      }
+      return true;
+    },
+    /**
+     * Apply datetime range and reload entries
+     */
+    applyDateTimeRange: function applyDateTimeRange() {
+      var _this1 = this;
+      if (!this.validateDateTimeRange()) {
+        return;
+      }
+      this.showDateTimeSelector = false;
+
+      // Update URL with datetime parameters
+      this.$router.push({
+        query: _objectSpread(_objectSpread({}, this.$route.query), {}, {
+          from_datetime: this.fromDateTime,
+          to_datetime: this.toDateTime
+        })
+      });
+
+      // Reset and reload entries with new datetime range
+      this.entries = [];
+      this.ready = false;
+      this.lastEntryIndex = '';
+      this.hasMoreEntries = true;
+      this.loadEntries(function (entries) {
+        _this1.entries = entries;
+        _this1.checkForNewEntries(); // This will not poll since datetime is set
+        _this1.ready = true;
+      });
+    },
+    /**
+     * Round fromDateTime to 5-minute intervals when user changes it
+     */
+    roundFromDateTime: function roundFromDateTime() {
+      if (this.fromDateTime) {
+        var date = new Date(this.fromDateTime);
+        this.fromDateTime = this.formatDateTimeLocal(this.roundToFiveMinutes(date));
+      }
+    },
+    /**
+     * Round toDateTime to 5-minute intervals when user changes it
+     */
+    roundToDateTime: function roundToDateTime() {
+      if (this.toDateTime) {
+        var date = new Date(this.toDateTime);
+        this.toDateTime = this.formatDateTimeLocal(this.roundToFiveMinutes(date));
+      }
+    },
+    /**
+     * Get formatted display text for current datetime range
+     */
+    getDateTimeRangeDisplay: function getDateTimeRangeDisplay() {
+      if (!this.fromDateTime || !this.toDateTime) {
+        return 'Live Monitoring (Last 30 mins)';
+      }
+      var fromDate = new Date(this.fromDateTime);
+      var toDate = new Date(this.toDateTime);
+      var fromStr = fromDate.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      var toStr = toDate.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      return "".concat(fromStr, " - ").concat(toStr);
+    },
+    /**
+     * Clear datetime filter and return to live monitoring
+     */
+    clearDateTimeFilter: function clearDateTimeFilter() {
+      var _this10 = this;
+      this.fromDateTime = '';
+      this.toDateTime = '';
+      this.showDateTimeSelector = false;
+
+      // Update URL to remove datetime parameters
+      this.$router.push({
+        query: _objectSpread(_objectSpread({}, this.$route.query), {}, {
+          from_datetime: undefined,
+          to_datetime: undefined
+        })
+      });
+
+      // Reset and reload entries for live monitoring
+      this.entries = [];
+      this.ready = false;
+      this.lastEntryIndex = '';
+      this.hasMoreEntries = true;
+      this.loadEntries(function (entries) {
+        _this10.entries = entries;
+        _this10.checkForNewEntries(); // Resume live monitoring
+        _this10.ready = true;
+      });
+    },
+    /**
+     * Initialize default datetime range for the selector (not applied by default)
+     */
+    setDefaultDateTimeRange: function setDefaultDateTimeRange() {
+      var now = new Date();
+      var thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
+
+      // Set default values in the form but don't apply them
+      this.fromDateTime = this.formatDateTimeLocal(this.roundToFiveMinutes(thirtyMinutesAgo));
+      this.toDateTime = this.formatDateTimeLocal(this.roundToFiveMinutes(now));
+    },
+    /**
+     * Cancel all pending requests
+     */
+    cancelAllRequests: function cancelAllRequests() {
+      if (this.loadEntriesCancelToken) {
+        this.loadEntriesCancelToken.cancel('Component navigation/destroy');
+        this.loadEntriesCancelToken = null;
+      }
+      if (this.checkNewEntriesCancelToken) {
+        this.checkNewEntriesCancelToken.cancel('Component navigation/destroy');
+        this.checkNewEntriesCancelToken = null;
+      }
+      if (this.updateEntriesCancelToken) {
+        this.updateEntriesCancelToken.cancel('Component navigation/destroy');
+        this.updateEntriesCancelToken = null;
       }
     }
   }
@@ -6907,10 +7185,7 @@ var render = function render() {
   }, [_vm._v(_vm._s(this.title))]), _vm._v(" "), _vm.selectedService || _vm.showServiceSelector ? _c("div", {
     staticClass: "dropdown"
   }, [_c("button", {
-    staticClass: "btn btn-sm btn-outline-primary dropdown-toggle",
-    "class": {
-      "btn-primary": _vm.selectedService
-    },
+    staticClass: "btn btn-sm btn-primary dropdown-toggle",
     attrs: {
       type: "button"
     },
@@ -6925,7 +7200,8 @@ var render = function render() {
     },
     attrs: {
       xmlns: "http://www.w3.org/2000/svg",
-      viewBox: "0 0 20 20"
+      viewBox: "0 0 20 20",
+      fill: "currentColor"
     }
   }, [_c("path", {
     attrs: {
@@ -6933,7 +7209,157 @@ var render = function render() {
       d: "M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z",
       "clip-rule": "evenodd"
     }
-  })]), _vm._v("\n                    " + _vm._s(_vm.selectedService || "Select Service") + "\n                ")])]) : _vm._e()]), _vm._v(" "), !_vm.hideSearch && (_vm.tag || _vm.entries.length > 0) && !_vm.serviceSelectionRequired ? _c("div", {
+  })]), _vm._v(" "), _c("span", {
+    staticStyle: {
+      color: "white"
+    }
+  }, [_vm._v(_vm._s(_vm.selectedService || "Select Service"))])])]) : _vm._e()]), _vm._v(" "), _c("div", {
+    staticClass: "d-flex justify-content-center flex-grow-1 align-items-center"
+  }, [_c("div", {
+    staticClass: "dropdown mr-2"
+  }, [_c("button", {
+    staticClass: "btn btn-sm dropdown-toggle",
+    "class": _vm.fromDateTime && _vm.toDateTime ? "btn-primary" : "btn-outline-secondary",
+    attrs: {
+      type: "button"
+    },
+    on: {
+      click: _vm.toggleDateTimeSelector
+    }
+  }, [_c("svg", {
+    staticClass: "icon mr-1",
+    staticStyle: {
+      width: "14px",
+      height: "14px"
+    },
+    attrs: {
+      xmlns: "http://www.w3.org/2000/svg",
+      viewBox: "0 0 20 20",
+      fill: "currentColor"
+    }
+  }, [_c("path", {
+    attrs: {
+      "fill-rule": "evenodd",
+      d: "M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z",
+      "clip-rule": "evenodd"
+    }
+  })]), _vm._v("\n                    " + _vm._s(_vm.getDateTimeRangeDisplay()) + "\n                ")]), _vm._v(" "), _vm.showDateTimeSelector ? _c("div", {
+    staticClass: "dropdown-menu show",
+    staticStyle: {
+      position: "absolute",
+      top: "100%",
+      left: "50%",
+      transform: "translateX(-50%)",
+      "z-index": "1050",
+      "min-width": "300px"
+    }
+  }, [_c("div", {
+    staticClass: "p-3"
+  }, [_c("h6", {
+    staticClass: "mb-3"
+  }, [_vm._v("Select Time Range (Max 1 hour)")]), _vm._v(" "), _c("div", {
+    staticClass: "form-group mb-3"
+  }, [_c("label", {
+    staticClass: "form-label",
+    attrs: {
+      "for": "fromDateTime"
+    }
+  }, [_vm._v("From (5-min intervals):")]), _vm._v(" "), _c("input", {
+    directives: [{
+      name: "model",
+      rawName: "v-model",
+      value: _vm.fromDateTime,
+      expression: "fromDateTime"
+    }],
+    staticClass: "form-control",
+    attrs: {
+      type: "datetime-local",
+      id: "fromDateTime",
+      step: "300"
+    },
+    domProps: {
+      value: _vm.fromDateTime
+    },
+    on: {
+      change: _vm.roundFromDateTime,
+      input: function input($event) {
+        if ($event.target.composing) return;
+        _vm.fromDateTime = $event.target.value;
+      }
+    }
+  })]), _vm._v(" "), _c("div", {
+    staticClass: "form-group mb-3"
+  }, [_c("label", {
+    staticClass: "form-label",
+    attrs: {
+      "for": "toDateTime"
+    }
+  }, [_vm._v("To (5-min intervals):")]), _vm._v(" "), _c("input", {
+    directives: [{
+      name: "model",
+      rawName: "v-model",
+      value: _vm.toDateTime,
+      expression: "toDateTime"
+    }],
+    staticClass: "form-control",
+    attrs: {
+      type: "datetime-local",
+      id: "toDateTime",
+      step: "300"
+    },
+    domProps: {
+      value: _vm.toDateTime
+    },
+    on: {
+      change: _vm.roundToDateTime,
+      input: function input($event) {
+        if ($event.target.composing) return;
+        _vm.toDateTime = $event.target.value;
+      }
+    }
+  })]), _vm._v(" "), _c("div", {
+    staticClass: "d-flex justify-content-between"
+  }, [_c("button", {
+    staticClass: "btn btn-sm btn-secondary",
+    on: {
+      click: function click($event) {
+        _vm.showDateTimeSelector = false;
+      }
+    }
+  }, [_vm._v("\n                                Cancel\n                            ")]), _vm._v(" "), _c("div", [_vm.fromDateTime && _vm.toDateTime ? _c("button", {
+    staticClass: "btn btn-sm btn-warning mr-2",
+    on: {
+      click: _vm.clearDateTimeFilter
+    }
+  }, [_vm._v("\n                                    Clear Filter\n                                ")]) : _vm._e(), _vm._v(" "), _c("button", {
+    staticClass: "btn btn-sm btn-primary",
+    on: {
+      click: _vm.applyDateTimeRange
+    }
+  }, [_vm._v("\n                                    Apply Filter\n                                ")])])])])]) : _vm._e()]), _vm._v(" "), _vm.fromDateTime && _vm.toDateTime ? _c("button", {
+    staticClass: "btn btn-sm btn-outline-warning",
+    attrs: {
+      title: "Return to live monitoring"
+    },
+    on: {
+      click: _vm.clearDateTimeFilter
+    }
+  }, [_c("svg", {
+    staticClass: "icon",
+    staticStyle: {
+      width: "14px",
+      height: "14px"
+    },
+    attrs: {
+      xmlns: "http://www.w3.org/2000/svg",
+      viewBox: "0 0 20 20",
+      fill: "currentColor"
+    }
+  }, [_c("path", {
+    attrs: {
+      d: "M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+    }
+  })])]) : _vm._e()]), _vm._v(" "), !_vm.hideSearch && (_vm.tag || _vm.entries.length > 0) && !_vm.serviceSelectionRequired ? _c("div", {
     staticClass: "form-control-with-icon w-25"
   }, [_c("div", {
     staticClass: "icon-wrapper"
@@ -6941,7 +7367,8 @@ var render = function render() {
     staticClass: "icon",
     attrs: {
       xmlns: "http://www.w3.org/2000/svg",
-      viewBox: "0 0 20 20"
+      viewBox: "0 0 20 20",
+      fill: "currentColor"
     }
   }, [_c("path", {
     attrs: {
@@ -8118,6 +8545,10 @@ var render = function render() {
               name: "batch-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -8287,6 +8718,10 @@ var render = function render() {
               name: "cache-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -8446,6 +8881,10 @@ var render = function render() {
               name: "client-request-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -8699,6 +9138,10 @@ var render = function render() {
               name: "command-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -9565,6 +10008,10 @@ var render = function render() {
               name: "gate-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -10081,6 +10528,10 @@ var render = function render() {
               name: "log-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -10456,6 +10907,10 @@ var render = function render() {
               name: "model-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -10761,6 +11216,10 @@ var render = function render() {
               name: "notification-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -10896,6 +11355,10 @@ var render = function render() {
               name: "query-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -11053,6 +11516,10 @@ var render = function render() {
               name: "redis-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -11484,6 +11951,10 @@ var render = function render() {
               name: "schedule-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                file_path: slotProps.entry.file_path
               }
             }
           }

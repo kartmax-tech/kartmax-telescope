@@ -63,6 +63,20 @@ class EntryQueryOptions
     public $timeRange;
 
     /**
+     * The start datetime for filtering entries.
+     *
+     * @var string
+     */
+    public $fromDateTime;
+
+    /**
+     * The end datetime for filtering entries.
+     *
+     * @var string
+     */
+    public $toDateTime;
+
+    /**
      * Create new entry query options from the incoming request.
      *
      * @param  \Illuminate\Http\Request  $request
@@ -78,6 +92,8 @@ class EntryQueryOptions
                 ->familyHash($request->family_hash)
                 ->serviceTag($request->service)
                 ->timeRange($request->time_range)
+                ->fromDateTime($request->from_datetime)
+                ->toDateTime($request->to_datetime)
                 ->limit($request->take ?? 50);
     }
 
@@ -192,6 +208,32 @@ class EntryQueryOptions
     public function timeRange(?int $timeRange)
     {
         $this->timeRange = $timeRange;
+
+        return $this;
+    }
+
+    /**
+     * Set the start datetime for filtering entries.
+     *
+     * @param  string  $fromDateTime
+     * @return $this
+     */
+    public function fromDateTime(?string $fromDateTime)
+    {
+        $this->fromDateTime = $fromDateTime;
+
+        return $this;
+    }
+
+    /**
+     * Set the end datetime for filtering entries.
+     *
+     * @param  string  $toDateTime
+     * @return $this
+     */
+    public function toDateTime(?string $toDateTime)
+    {
+        $this->toDateTime = $toDateTime;
 
         return $this;
     }

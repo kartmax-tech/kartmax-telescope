@@ -32,7 +32,7 @@
                     <path class="fill-primary" d="M0 40a39.87 39.87 0 0 1 11.72-28.28A40 40 0 1 1 0 40zm34 10a4 4 0 0 1-4-4v-2a2 2 0 1 0-4 0v2a4 4 0 0 1-4 4h-2a2 2 0 1 0 0 4h2a4 4 0 0 1 4 4v2a2 2 0 1 0 4 0v-2a4 4 0 0 1 4-4h2a2 2 0 1 0 0-4h-2zm24-24a6 6 0 0 1-6-6v-3a3 3 0 0 0-6 0v3a6 6 0 0 1-6 6h-3a3 3 0 0 0 0 6h3a6 6 0 0 1 6 6v3a3 3 0 0 0 6 0v-3a6 6 0 0 1 6-6h3a3 3 0 0 0 0-6h-3zm-4 36a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM21 28a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"></path>
                 </svg>
 
-                <h4 class="mb-0 ml-3"><strong>KartmaX</strong>Laravel Telescope</h4>
+                <h4 class="mb-0 ml-3"><strong>KartmaX</strong> Laravel Telescope</h4>
             </router-link>
 
             <button class="btn btn-muted ml-auto mr-3 d-flex align-items-center py-2" v-on:click.prevent="toggleRecording" :title="recording ? 'Pause recording' : 'Resume recording'">
@@ -65,17 +65,16 @@
 
             <!-- Service Selector Dropdown -->
             <div class="dropdown">
-                <button class="btn btn-outline-primary dropdown-toggle d-flex align-items-center py-2" 
+                <button class="btn btn-primary dropdown-toggle d-flex align-items-center py-2" 
                         type="button" 
                         id="serviceDropdown" 
                         data-toggle="dropdown" 
                         aria-haspopup="true" 
-                        aria-expanded="false"
-                        v-bind:class="{'btn-primary': selectedService}">
+                        aria-expanded="false">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" class="icon mr-2" fill="currentColor">
                         <path fill-rule="evenodd" d="M4.25 2A2.25 2.25 0 002 4.25v2.5A2.25 2.25 0 004.25 9h2.5A2.25 2.25 0 009 6.75v-2.5A2.25 2.25 0 006.75 2h-2.5zm0 9A2.25 2.25 0 002 13.25v2.5A2.25 2.25 0 004.25 18h2.5A2.25 2.25 0 009 15.75v-2.5A2.25 2.25 0 006.75 11h-2.5zm9-9A2.25 2.25 0 0011 4.25v2.5A2.25 2.25 0 0013.25 9h2.5A2.25 2.25 0 0018 6.75v-2.5A2.25 2.25 0 0015.75 2h-2.5zm0 9A2.25 2.25 0 0011 13.25v2.5A2.25 2.25 0 0013.25 18h2.5A2.25 2.25 0 0018 15.75v-2.5A2.25 2.25 0 0015.75 11h-2.5z" clip-rule="evenodd" />
                     </svg>
-                    <span v-text="selectedService || 'Builder'"></span>
+                    <span v-text="selectedService || 'Builder'" style="color: white;"></span>
                 </button>
                 <div class="dropdown-menu dropdown-menu-right" aria-labelledby="serviceDropdown">
                     <a class="dropdown-item" 

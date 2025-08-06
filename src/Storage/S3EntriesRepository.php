@@ -63,11 +63,15 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
 
     protected function entryPath($type, $batchId, $uuid, $entry = null)
     {
-        $now = now();
+        $now = now()->setTimezone('Asia/Kolkata');
         $serviceTag = $this->getServiceTag($entry);
         $date = $now->format('Y-m-d');
-        $hour = $now->format('H');
-        $minute = $now->format('i');
+        $hour = $now->format('H'); // 24-hour format (00-23)
+        
+        // Round to nearest 5-minute interval
+        $currentMinute = intval($now->format('i'));
+        $roundedMinute = intval($currentMinute / 5) * 5;
+        $minute = sprintf('%02d', $roundedMinute);
         
         return "{$this->directory}/{$type}/{$serviceTag}/{$date}/{$hour}/{$minute}/{$uuid}.json";
     }
@@ -126,26 +130,53 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
     {
         // Require service to be specified - throw exception if missing
         if (!isset($options->serviceTag) || empty($options->serviceTag)) {
-            throw new \InvalidArgumentException(
-                'Service selection required. Please select a service to view logs. ' .
-                'Available services can be configured via TELESCOPE_CUSTOM_STATIC_TAG environment variable.'
-            );
+            throw new \InvalidArgumentException('Service selection required. Please select a service to view logs.');
         }
 
         $results = collect();
         $serviceTag = $options->serviceTag;
         
-        // Determine time range to scan (default: last 30 minutes for real-time viewing)
-        $minutesToScan = $options->timeRange ?? 30;
+        // Determine time range to scan
         $timeSlots = collect();
         
-        for ($i = 0; $i < $minutesToScan; $i++) {
-            $time = now()->subMinutes($i);
-            $timeSlots->push([
-                'date' => $time->format('Y-m-d'),
-                'hour' => $time->format('H'),
-                'minute' => $time->format('i')
-            ]);
+        if ($options->fromDateTime && $options->toDateTime) {
+            // Use specific datetime range with 5-minute intervals (convert to Asia/Kolkata)
+            $fromDate = Carbon::parse($options->fromDateTime)->setTimezone('Asia/Kolkata');
+            $toDate = Carbon::parse($options->toDateTime)->setTimezone('Asia/Kolkata');
+            
+            // Round down to nearest 5-minute interval for start
+            $current = $fromDate->copy();
+            $currentMinute = intval($current->format('i'));
+            $roundedMinute = intval($currentMinute / 5) * 5;
+            $current->minute($roundedMinute)->second(0);
+            
+            // Generate time slots for each 5-minute interval in the range
+            while ($current->lessThanOrEqualTo($toDate)) {
+                $timeSlots->push([
+                    'date' => $current->format('Y-m-d'),
+                    'hour' => $current->format('H'), // 24-hour format
+                    'minute' => sprintf('%02d', $current->minute)
+                ]);
+                $current->addMinutes(5);
+            }
+        } else {
+            // Fallback to time range with 5-minute intervals (default: last 30 minutes, Asia/Kolkata time)
+            $minutesToScan = $options->timeRange ?? 30;
+            $fiveMinuteSlots = ceil($minutesToScan / 5);
+            
+            for ($i = 0; $i < $fiveMinuteSlots; $i++) {
+                $time = now()->setTimezone('Asia/Kolkata')->subMinutes($i * 5);
+                // Round down to nearest 5-minute interval
+                $minute = intval($time->format('i'));
+                $roundedMinute = intval($minute / 5) * 5;
+                $time->minute($roundedMinute);
+                
+                $timeSlots->push([
+                    'date' => $time->format('Y-m-d'),
+                    'hour' => $time->format('H'), // 24-hour format
+                    'minute' => sprintf('%02d', $time->minute)
+                ]);
+            }
         }
 
         // Build the base path with service tag

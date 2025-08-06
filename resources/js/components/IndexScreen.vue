@@ -46,6 +46,17 @@
                     'user',
                     'b2b'
                 ],
+
+                // DateTime range selection
+                fromDateTime: '',
+                toDateTime: '',
+                showDateTimeSelector: false,
+                maxHourDuration: 1, // Maximum 1 hour selection
+
+                // Request cancellation
+                loadEntriesCancelToken: null,
+                checkNewEntriesCancelToken: null,
+                updateEntriesCancelToken: null
             };
         },
 
@@ -59,6 +70,10 @@
             this.familyHash = this.$route.query.family_hash || '';
             this.tag = this.$route.query.tag || '';
             this.selectedService = this.$route.query.service || this.getCurrentService();
+
+            // Initialize datetime range from URL params if present
+            this.fromDateTime = this.$route.query.from_datetime || '';
+            this.toDateTime = this.$route.query.to_datetime || '';
 
             this.loadEntries((entries) => {
                 this.entries = entries;
@@ -77,12 +92,21 @@
 
 
         /**
+         * Clean before the component is destroyed.
+         */
+        beforeDestroy() {
+            this.cancelAllRequests();
+        },
+
+        /**
          * Clean after the component is destroyed.
          */
         destroyed() {
             clearTimeout(this.newEntriesTimeout);
             clearTimeout(this.updateEntriesTimeout);
             clearTimeout(this.updateTimeAgoTimeout);
+
+            this.cancelAllRequests();
 
             document.onkeyup = null;
         },
@@ -118,13 +142,30 @@
 
         methods: {
             loadEntries(after){
-                axios.post(Telescope.basePath + '/telescope-api/' + this.resource +
-                        '?tag=' + this.tag +
-                        '&before=' + this.lastEntryIndex +
-                        '&take=' + this.entriesPerRequest +
-                        '&family_hash=' + this.familyHash +
-                        '&service=' + this.selectedService
-                ).then(response => {
+                // Cancel any existing loadEntries request
+                if (this.loadEntriesCancelToken) {
+                    this.loadEntriesCancelToken.cancel('Operation cancelled due to new request');
+                }
+                
+                // Create new cancel token
+                this.loadEntriesCancelToken = axios.CancelToken.source();
+                
+                let url = Telescope.basePath + '/telescope-api/' + this.resource +
+                    '?tag=' + this.tag +
+                    '&before=' + this.lastEntryIndex +
+                    '&take=' + this.entriesPerRequest +
+                    '&family_hash=' + this.familyHash +
+                    '&service=' + this.selectedService;
+                
+                // Only add datetime parameters if they are set
+                if (this.fromDateTime && this.toDateTime) {
+                    url += '&from_datetime=' + encodeURIComponent(this.fromDateTime) +
+                           '&to_datetime=' + encodeURIComponent(this.toDateTime);
+                }
+                
+                axios.post(url, {}, {
+                    cancelToken: this.loadEntriesCancelToken.token
+                }).then(response => {
                     this.lastEntryIndex = response.data.entries.length ? _.last(response.data.entries).sequence : this.lastEntryIndex;
 
                     this.hasMoreEntries = response.data.entries.length >= this.entriesPerRequest;
@@ -137,6 +178,11 @@
                         );
                     }
                 }).catch(error => {
+                    // Don't handle cancelled requests
+                    if (axios.isCancel(error)) {
+                        return;
+                    }
+                    
                     if (error.response && error.response.status === 422) {
                         // Service selection required
                         this.serviceSelectionRequired = true;
@@ -147,6 +193,9 @@
                         this.$root.alert.type = 'error';
                         this.$root.alert.message = error.response?.data?.message || 'An error occurred while loading entries.';
                     }
+                }).finally(() => {
+                    // Clear the cancel token since request is complete
+                    this.loadEntriesCancelToken = null;
                 })
             },
 
@@ -160,13 +209,29 @@
                     return;
                 }
                 
+                // Don't poll for new entries when datetime filter is active (viewing historical data)
+                if (this.fromDateTime && this.toDateTime) {
+                    return;
+                }
+                
                 this.newEntriesTimeout = setTimeout(() => {
-                    axios.post(Telescope.basePath + '/telescope-api/' + this.resource +
-                            '?tag=' + this.tag +
-                            '&take=1' +
-                            '&family_hash=' + this.familyHash +
-                            '&service=' + this.selectedService
-                    ).then(response => {
+                    // Cancel any existing checkNewEntries request
+                    if (this.checkNewEntriesCancelToken) {
+                        this.checkNewEntriesCancelToken.cancel('Operation cancelled due to new request');
+                    }
+                    
+                    // Create new cancel token
+                    this.checkNewEntriesCancelToken = axios.CancelToken.source();
+                    
+                    let url = Telescope.basePath + '/telescope-api/' + this.resource +
+                        '?tag=' + this.tag +
+                        '&take=1' +
+                        '&family_hash=' + this.familyHash +
+                        '&service=' + this.selectedService;
+                    
+                    axios.post(url, {}, {
+                        cancelToken: this.checkNewEntriesCancelToken.token
+                    }).then(response => {
                         if (! this._isDestroyed) {
                             this.recordingStatus = response.data.status;
 
@@ -182,6 +247,19 @@
                                 this.checkForNewEntries();
                             }
                         }
+                    }).catch(error => {
+                        // Don't handle cancelled requests
+                        if (axios.isCancel(error)) {
+                            return;
+                        }
+                        
+                        // Continue checking even if there's an error
+                        if (!this._isDestroyed) {
+                            this.checkForNewEntries();
+                        }
+                    }).finally(() => {
+                        // Clear the cancel token since request is complete
+                        this.checkNewEntriesCancelToken = null;
                     })
                 }, this.newEntriesTimer);
             },
@@ -261,8 +339,18 @@
                     let uuids = _.chain(this.entries).filter(entry => entry.content.status === 'pending').map('id').value();
 
                     if (uuids.length) {
+                        // Cancel any existing updateEntries request
+                        if (this.updateEntriesCancelToken) {
+                            this.updateEntriesCancelToken.cancel('Operation cancelled due to new request');
+                        }
+                        
+                        // Create new cancel token
+                        this.updateEntriesCancelToken = axios.CancelToken.source();
+                        
                         axios.post(Telescope.basePath + '/telescope-api/' + this.resource, {
                             uuids: uuids
+                        }, {
+                            cancelToken: this.updateEntriesCancelToken.token
                         }).then(response => {
                             this.recordingStatus = response.data.status;
 
@@ -271,6 +359,15 @@
 
                                 return _.find(response.data.entries, {id: entry.id});
                             });
+                        }).catch(error => {
+                            // Don't handle cancelled requests
+                            if (axios.isCancel(error)) {
+                                return;
+                            }
+                            // Silently continue on error
+                        }).finally(() => {
+                            // Clear the cancel token since request is complete
+                            this.updateEntriesCancelToken = null;
                         })
                     }
 
@@ -338,6 +435,220 @@
                 if (!this.selectedService) {
                     this.serviceSelectionRequired = true;
                 }
+            },
+
+
+
+            /**
+             * Round date to nearest 5-minute interval
+             */
+            roundToFiveMinutes(date) {
+                const roundedDate = new Date(date);
+                const minutes = roundedDate.getMinutes();
+                const roundedMinutes = Math.floor(minutes / 5) * 5;
+                roundedDate.setMinutes(roundedMinutes, 0, 0); // Set seconds and milliseconds to 0
+                return roundedDate;
+            },
+
+            /**
+             * Format date for datetime-local input
+             */
+            formatDateTimeLocal(date) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                
+                return `${year}-${month}-${day}T${hours}:${minutes}`;
+            },
+
+            /**
+             * Toggle datetime selector visibility
+             */
+            toggleDateTimeSelector() {
+                this.showDateTimeSelector = !this.showDateTimeSelector;
+                
+                // If opening the selector and no datetime is set, populate with defaults
+                if (this.showDateTimeSelector && (!this.fromDateTime || !this.toDateTime)) {
+                    this.setDefaultDateTimeRange();
+                }
+            },
+
+            /**
+             * Validate datetime range (max 1 hour, 5-minute intervals)
+             */
+            validateDateTimeRange() {
+                if (!this.fromDateTime || !this.toDateTime) {
+                    return false;
+                }
+
+                const fromDate = new Date(this.fromDateTime);
+                const toDate = new Date(this.toDateTime);
+                
+                // Check if dates are aligned to 5-minute intervals
+                if (fromDate.getMinutes() % 5 !== 0 || fromDate.getSeconds() !== 0) {
+                    alert('Start time must be aligned to 5-minute intervals (e.g., 10:00, 10:05, 10:10).');
+                    return false;
+                }
+                
+                if (toDate.getMinutes() % 5 !== 0 || toDate.getSeconds() !== 0) {
+                    alert('End time must be aligned to 5-minute intervals (e.g., 10:00, 10:05, 10:10).');
+                    return false;
+                }
+
+                const diffInHours = (toDate - fromDate) / (1000 * 60 * 60);
+
+                if (diffInHours > this.maxHourDuration) {
+                    alert(`Maximum time range is ${this.maxHourDuration} hour(s). Please select a shorter range.`);
+                    return false;
+                }
+
+                if (diffInHours <= 0) {
+                    alert('End time must be after start time.');
+                    return false;
+                }
+
+                return true;
+            },
+
+            /**
+             * Apply datetime range and reload entries
+             */
+            applyDateTimeRange() {
+                if (!this.validateDateTimeRange()) {
+                    return;
+                }
+
+                this.showDateTimeSelector = false;
+                
+                // Update URL with datetime parameters
+                this.$router.push({
+                    query: {
+                        ...this.$route.query,
+                        from_datetime: this.fromDateTime,
+                        to_datetime: this.toDateTime
+                    }
+                });
+                
+                // Reset and reload entries with new datetime range
+                this.entries = [];
+                this.ready = false;
+                this.lastEntryIndex = '';
+                this.hasMoreEntries = true;
+                
+                this.loadEntries((entries) => {
+                    this.entries = entries;
+                    this.checkForNewEntries(); // This will not poll since datetime is set
+                    this.ready = true;
+                });
+            },
+
+            /**
+             * Round fromDateTime to 5-minute intervals when user changes it
+             */
+            roundFromDateTime() {
+                if (this.fromDateTime) {
+                    const date = new Date(this.fromDateTime);
+                    this.fromDateTime = this.formatDateTimeLocal(this.roundToFiveMinutes(date));
+                }
+            },
+
+            /**
+             * Round toDateTime to 5-minute intervals when user changes it
+             */
+            roundToDateTime() {
+                if (this.toDateTime) {
+                    const date = new Date(this.toDateTime);
+                    this.toDateTime = this.formatDateTimeLocal(this.roundToFiveMinutes(date));
+                }
+            },
+
+            /**
+             * Get formatted display text for current datetime range
+             */
+            getDateTimeRangeDisplay() {
+                if (!this.fromDateTime || !this.toDateTime) {
+                    return 'Live Monitoring (Last 30 mins)';
+                }
+
+                const fromDate = new Date(this.fromDateTime);
+                const toDate = new Date(this.toDateTime);
+                
+                const fromStr = fromDate.toLocaleString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                const toStr = toDate.toLocaleString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                return `${fromStr} - ${toStr}`;
+            },
+
+            /**
+             * Clear datetime filter and return to live monitoring
+             */
+            clearDateTimeFilter() {
+                this.fromDateTime = '';
+                this.toDateTime = '';
+                this.showDateTimeSelector = false;
+                
+                // Update URL to remove datetime parameters
+                this.$router.push({
+                    query: {
+                        ...this.$route.query,
+                        from_datetime: undefined,
+                        to_datetime: undefined
+                    }
+                });
+                
+                // Reset and reload entries for live monitoring
+                this.entries = [];
+                this.ready = false;
+                this.lastEntryIndex = '';
+                this.hasMoreEntries = true;
+                
+                this.loadEntries((entries) => {
+                    this.entries = entries;
+                    this.checkForNewEntries(); // Resume live monitoring
+                    this.ready = true;
+                });
+            },
+
+            /**
+             * Initialize default datetime range for the selector (not applied by default)
+             */
+            setDefaultDateTimeRange() {
+                const now = new Date();
+                const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
+                
+                // Set default values in the form but don't apply them
+                this.fromDateTime = this.formatDateTimeLocal(this.roundToFiveMinutes(thirtyMinutesAgo));
+                this.toDateTime = this.formatDateTimeLocal(this.roundToFiveMinutes(now));
+            },
+
+            /**
+             * Cancel all pending requests
+             */
+            cancelAllRequests() {
+                if (this.loadEntriesCancelToken) {
+                    this.loadEntriesCancelToken.cancel('Component navigation/destroy');
+                    this.loadEntriesCancelToken = null;
+                }
+                if (this.checkNewEntriesCancelToken) {
+                    this.checkNewEntriesCancelToken.cancel('Component navigation/destroy');
+                    this.checkNewEntriesCancelToken = null;
+                }
+                if (this.updateEntriesCancelToken) {
+                    this.updateEntriesCancelToken.cancel('Component navigation/destroy');
+                    this.updateEntriesCancelToken = null;
+                }
             }
         }
     }
@@ -351,18 +662,86 @@
                 
                 <!-- Service Selector -->
                 <div class="dropdown" v-if="selectedService || showServiceSelector">
-                    <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" @click="showServiceSelection" :class="{'btn-primary': selectedService}">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" class="icon" style="width: 14px; height: 14px;">
+                    <button class="btn btn-sm btn-primary dropdown-toggle" type="button" @click="showServiceSelection">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" class="icon" style="width: 14px; height: 14px;" fill="currentColor">
                             <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
                         </svg>
-                        {{ selectedService || 'Select Service' }}
+                        <span style="color: white;">{{ selectedService || 'Select Service' }}</span>
                     </button>
                 </div>
             </div>
 
+            <div class="d-flex justify-content-center flex-grow-1 align-items-center">
+                <!-- DateTime Range Selector -->
+                <div class="dropdown mr-2">
+                    <button class="btn btn-sm dropdown-toggle" 
+                            type="button" 
+                            @click="toggleDateTimeSelector"
+                            :class="fromDateTime && toDateTime ? 'btn-primary' : 'btn-outline-secondary'">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" class="icon mr-1" style="width: 14px; height: 14px;" fill="currentColor">
+                            <path fill-rule="evenodd" d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z" clip-rule="evenodd" />
+                        </svg>
+                        {{ getDateTimeRangeDisplay() }}
+                    </button>
+                    
+                    <!-- DateTime Range Dropdown -->
+                    <div v-if="showDateTimeSelector" class="dropdown-menu show" style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); z-index: 1050; min-width: 300px;">
+                        <div class="p-3">
+                            <h6 class="mb-3">Select Time Range (Max 1 hour)</h6>
+                            
+                            <div class="form-group mb-3">
+                                <label for="fromDateTime" class="form-label">From (5-min intervals):</label>
+                                <input type="datetime-local" 
+                                       id="fromDateTime" 
+                                       class="form-control" 
+                                       v-model="fromDateTime"
+                                       step="300"
+                                       @change="roundFromDateTime">
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label for="toDateTime" class="form-label">To (5-min intervals):</label>
+                                <input type="datetime-local" 
+                                       id="toDateTime" 
+                                       class="form-control" 
+                                       v-model="toDateTime"
+                                       step="300"
+                                       @change="roundToDateTime">
+                            </div>
+                            
+                            <div class="d-flex justify-content-between">
+                                <button class="btn btn-sm btn-secondary" @click="showDateTimeSelector = false">
+                                    Cancel
+                                </button>
+                                <div>
+                                    <button class="btn btn-sm btn-warning mr-2" 
+                                            @click="clearDateTimeFilter"
+                                            v-if="fromDateTime && toDateTime">
+                                        Clear Filter
+                                    </button>
+                                    <button class="btn btn-sm btn-primary" @click="applyDateTimeRange">
+                                        Apply Filter
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Clear Filter Button (when filter is active) -->
+                <button class="btn btn-sm btn-outline-warning" 
+                        @click="clearDateTimeFilter"
+                        v-if="fromDateTime && toDateTime"
+                        title="Return to live monitoring">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" class="icon" style="width: 14px; height: 14px;" fill="currentColor">
+                        <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                    </svg>
+                </button>
+            </div>
+
             <div class="form-control-with-icon w-25" v-if="!hideSearch && (tag || entries.length > 0) && !serviceSelectionRequired">
                 <div class="icon-wrapper">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" class="icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" class="icon" fill="currentColor">
                         <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
                     </svg>
                 </div>
