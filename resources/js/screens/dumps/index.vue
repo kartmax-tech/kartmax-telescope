@@ -43,7 +43,8 @@
 
         methods: {
             loadEntries(){
-                axios.post(Telescope.basePath + '/telescope-api/dumps').then(response => {
+                const selectedService = this.getCurrentService();
+                axios.post(Telescope.basePath + '/telescope-api/dumps?service=' + selectedService).then(response => {
                     this.ready = true;
                     this.dump = response.data.dump;
                     this.entries = response.data.entries;
@@ -61,7 +62,8 @@
              */
             checkForNewEntries(){
                 this.newEntriesTimeout = setTimeout(() => {
-                    axios.post(Telescope.basePath + '/telescope-api/dumps?take=1').then(response => {
+                    const selectedService = this.getCurrentService();
+                    axios.post(Telescope.basePath + '/telescope-api/dumps?take=1&service=' + selectedService).then(response => {
                         this.recordingStatus = response.data.status;
 
                         if (response.data.entries.length && !this.entries.length) {

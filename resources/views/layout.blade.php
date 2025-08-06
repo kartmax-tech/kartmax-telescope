@@ -56,12 +56,66 @@
                 </svg>
             </button>
 
-            <router-link to="/monitored-tags" class="btn btn-muted d-flex align-items-center py-2" title="Monitoring">
+            <router-link to="/monitored-tags" class="btn btn-muted mr-3 d-flex align-items-center py-2" title="Monitoring">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" class="icon" fill="currentColor">
                     <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
                     <path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
                 </svg>
             </router-link>
+
+            <!-- Service Selector Dropdown -->
+            <div class="dropdown">
+                <button class="btn btn-outline-primary dropdown-toggle d-flex align-items-center py-2" 
+                        type="button" 
+                        id="serviceDropdown" 
+                        data-toggle="dropdown" 
+                        aria-haspopup="true" 
+                        aria-expanded="false"
+                        :class="{'btn-primary': selectedService}">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" class="icon mr-2" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4.25 2A2.25 2.25 0 002 4.25v2.5A2.25 2.25 0 004.25 9h2.5A2.25 2.25 0 009 6.75v-2.5A2.25 2.25 0 006.75 2h-2.5zm0 9A2.25 2.25 0 002 13.25v2.5A2.25 2.25 0 004.25 18h2.5A2.25 2.25 0 009 15.75v-2.5A2.25 2.25 0 006.75 11h-2.5zm9-9A2.25 2.25 0 0011 4.25v2.5A2.25 2.25 0 0013.25 9h2.5A2.25 2.25 0 0018 6.75v-2.5A2.25 2.25 0 0015.75 2h-2.5zm0 9A2.25 2.25 0 0011 13.25v2.5A2.25 2.25 0 0013.25 18h2.5A2.25 2.25 0 0018 15.75v-2.5A2.25 2.25 0 0015.75 11h-2.5z" clip-rule="evenodd" />
+                    </svg>
+                    {{ selectedService || 'Builder' }}
+                </button>
+                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="serviceDropdown">
+                    <a class="dropdown-item" 
+                       href="#" 
+                       @click.prevent="selectService('builder')"
+                       :class="{'active': selectedService === 'builder'}">
+                        Builder
+                    </a>
+                    <a class="dropdown-item" 
+                       href="#" 
+                       @click.prevent="selectService('search')"
+                       :class="{'active': selectedService === 'search'}">
+                        Search
+                    </a>
+                    <a class="dropdown-item" 
+                       href="#" 
+                       @click.prevent="selectService('cart')"
+                       :class="{'active': selectedService === 'cart'}">
+                        Cart
+                    </a>
+                    <a class="dropdown-item" 
+                       href="#" 
+                       @click.prevent="selectService('admin')"
+                       :class="{'active': selectedService === 'admin'}">
+                        Admin
+                    </a>
+                    <a class="dropdown-item" 
+                       href="#" 
+                       @click.prevent="selectService('user')"
+                       :class="{'active': selectedService === 'user'}">
+                        User
+                    </a>
+                    <a class="dropdown-item" 
+                       href="#" 
+                       @click.prevent="selectService('b2b')"
+                       :class="{'active': selectedService === 'b2b'}">
+                        B2B
+                    </a>
+                </div>
+            </div>
         </div>
 
         <div class="row mt-4">

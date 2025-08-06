@@ -39,16 +39,12 @@
                 showServiceSelector: false,
                 serviceSelectionRequired: false,
                 staticServices: [
-                    'user-service',
-                    'payment-service', 
-                    'auth-service',
-                    'notification-service',
-                    'analytics-service',
-                    'order-service',
-                    'inventory-service',
-                    'shipping-service',
-                    'billing-service',
-                    'admin-service'
+                    'builder',
+                    'search',
+                    'cart',
+                    'admin',
+                    'user',
+                    'b2b'
                 ],
             };
         },
@@ -62,7 +58,7 @@
 
             this.familyHash = this.$route.query.family_hash || '';
             this.tag = this.$route.query.tag || '';
-            this.selectedService = this.$route.query.service || localStorage.getItem('telescope_selected_service') || '';
+            this.selectedService = this.$route.query.service || this.getCurrentService();
 
             this.loadEntries((entries) => {
                 this.entries = entries;

@@ -21,7 +21,8 @@
             document.title = "Monitoring - Telescope";
 
 
-            axios.get(Telescope.basePath + '/telescope-api/monitored-tags').then(response => {
+            const selectedService = this.getCurrentService();
+            axios.get(Telescope.basePath + '/telescope-api/monitored-tags?service=' + selectedService).then(response => {
                 this.tags = response.data.tags;
 
                 this.ready = true;
@@ -34,7 +35,8 @@
                 this.alertConfirm('Are you sure you want to remove this tag?', ()=> {
                     this.tags = _.reject(this.tags, t => t === tag);
 
-                    axios.post(Telescope.basePath + '/telescope-api/monitored-tags/delete', {tag: tag});
+                    const selectedService = this.getCurrentService();
+                    axios.post(Telescope.basePath + '/telescope-api/monitored-tags/delete', {tag: tag, service: selectedService});
                 });
             },
 
@@ -56,7 +58,8 @@
              */
             monitorNewTag(){
                 if (this.newTag.length) {
-                    axios.post(Telescope.basePath + '/telescope-api/monitored-tags', {tag: this.newTag});
+                    const selectedService = this.getCurrentService();
+                    axios.post(Telescope.basePath + '/telescope-api/monitored-tags', {tag: this.newTag, service: selectedService});
 
                     this.tags.push(this.newTag);
                 }

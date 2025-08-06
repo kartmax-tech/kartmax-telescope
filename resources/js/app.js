@@ -63,11 +63,30 @@ new Vue({
             autoLoadsNewEntries: localStorage.autoLoadsNewEntries === '1',
 
             recording: Telescope.recording,
+
+            // Service selection
+            selectedService: localStorage.getItem('telescope_selected_service') || 'builder',
+            services: ['builder', 'search', 'cart', 'admin', 'user', 'b2b'],
         };
     },
 
     created() {
         window.addEventListener('keydown', this.keydownListener);
+        
+        // Initialize service from URL if present
+        if (this.$route.query.service) {
+            this.selectedService = this.$route.query.service;
+            localStorage.setItem('telescope_selected_service', this.$route.query.service);
+        }
+    },
+
+    watch: {
+        '$route.query.service'(newService) {
+            if (newService && newService !== this.selectedService) {
+                this.selectedService = newService;
+                localStorage.setItem('telescope_selected_service', newService);
+            }
+        }
     },
 
     destroyed() {
@@ -104,6 +123,36 @@ new Vue({
             if (event.metaKey && event.key === 'k') {
                 this.clearEntries(false);
             }
+        },
+
+        selectService(service) {
+            this.selectedService = service;
+            
+            // Save to localStorage for persistence
+            localStorage.setItem('telescope_selected_service', service);
+            
+            // Update URL with service parameter if not already present
+            if (this.$route.query.service !== service) {
+                this.$router.push({
+                    query: { ...this.$route.query, service: service }
+                }).catch(() => {}); // Ignore navigation duplicate errors
+            }
+            
+            // Broadcast service change to all child components
+            this.$children.forEach(child => {
+                if (child.refreshWithNewService && typeof child.refreshWithNewService === 'function') {
+                    child.refreshWithNewService(service);
+                }
+            });
+            
+            // For components that don't have refreshWithNewService, reload the page
+            this.$nextTick(() => {
+                window.location.reload();
+            });
+        },
+
+        getCurrentService() {
+            return this.selectedService || localStorage.getItem('telescope_selected_service') || 'builder';
         },
     },
 });

@@ -93,7 +93,8 @@
 
 
             loadEntry(after){
-                axios.get(Telescope.basePath + '/telescope-api/' + this.resource + '/' + this.id).then(response => {
+                const selectedService = this.getCurrentService();
+                axios.get(Telescope.basePath + '/telescope-api/' + this.resource + '/' + this.id + '?service=' + selectedService).then(response => {
                     if (_.isFunction(after)) {
                         after(response);
                     }

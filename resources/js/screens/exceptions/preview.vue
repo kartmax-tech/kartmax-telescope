@@ -24,7 +24,8 @@
             markExceptionAsResolved(entry) {
                 this.alertConfirm('Are you sure you want to mark this exception as resolved?', () => {
 
-                    axios.put(Telescope.basePath + '/telescope-api/exceptions/' + entry.id, {
+                    const selectedService = this.getCurrentService();
+                    axios.put(Telescope.basePath + '/telescope-api/exceptions/' + entry.id + '?service=' + selectedService, {
                         'resolved_at': 'now',
                     }).then(response => {
                         this.entry = response.data.entry;

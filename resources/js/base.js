@@ -94,5 +94,12 @@ export default {
             this.$root.alert.confirmationProceed = success;
             this.$root.alert.confirmationCancel = failure;
         },
+
+        /**
+         * Get the currently selected service.
+         */
+        getCurrentService() {
+            return this.$root.selectedService || localStorage.getItem('telescope_selected_service') || 'builder';
+        },
     },
 };
