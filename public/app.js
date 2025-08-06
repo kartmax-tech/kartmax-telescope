@@ -5331,7 +5331,35 @@ __webpack_require__.r(__webpack_exports__);
     loadEntry: function loadEntry(after) {
       var _this2 = this;
       var selectedService = this.getCurrentService();
-      axios__WEBPACK_IMPORTED_MODULE_1__["default"].get(Telescope.basePath + '/telescope-api/' + this.resource + '/' + this.id + '?service=' + selectedService).then(function (response) {
+
+      // Build query parameters from route query
+      var queryParams = {
+        service: selectedService
+      };
+
+      // Add context parameters from the route query if available
+      if (this.$route.query) {
+        if (this.$route.query.created_at) queryParams.created_at = this.$route.query.created_at;
+        if (this.$route.query.hostname) queryParams.hostname = this.$route.query.hostname;
+        if (this.$route.query.method) queryParams.method = this.$route.query.method;
+        if (this.$route.query.uri) queryParams.uri = this.$route.query.uri;
+        if (this.$route.query.status) queryParams.status = this.$route.query.status;
+        if (this.$route.query.name) queryParams.name = this.$route.query.name;
+        if (this.$route.query.connection) queryParams.connection = this.$route.query.connection;
+        if (this.$route.query.queue) queryParams.queue = this.$route.query.queue;
+        if (this.$route.query["class"]) queryParams["class"] = this.$route.query["class"];
+        if (this.$route.query.message) queryParams.message = this.$route.query.message;
+        if (this.$route.query.mailable) queryParams.mailable = this.$route.query.mailable;
+        if (this.$route.query.subject) queryParams.subject = this.$route.query.subject;
+        if (this.$route.query.broadcast) queryParams.broadcast = this.$route.query.broadcast;
+        if (this.$route.query.path) queryParams.path = this.$route.query.path;
+      }
+
+      // Convert to URL query string
+      var queryString = Object.keys(queryParams).map(function (key) {
+        return encodeURIComponent(key) + '=' + encodeURIComponent(queryParams[key]);
+      }).join('&');
+      axios__WEBPACK_IMPORTED_MODULE_1__["default"].get(Telescope.basePath + '/telescope-api/' + this.resource + '/' + this.id + '?' + queryString).then(function (response) {
         if (lodash__WEBPACK_IMPORTED_MODULE_0___default().isFunction(after)) {
           after(response);
         }
@@ -9022,6 +9050,13 @@ var render = function render() {
               name: "event-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                created_at: slotProps.entry.created_at,
+                hostname: slotProps.entry.content.hostname,
+                name: slotProps.entry.content.name,
+                broadcast: slotProps.entry.content.broadcast
               }
             }
           }
@@ -9256,6 +9291,13 @@ var render = function render() {
               name: "exception-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                created_at: slotProps.entry.created_at,
+                hostname: slotProps.entry.content.hostname,
+                "class": slotProps.entry.content["class"],
+                message: slotProps.entry.content.message
               }
             }
           }
@@ -9775,6 +9817,15 @@ var render = function render() {
               name: "job-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                created_at: slotProps.entry.created_at,
+                hostname: slotProps.entry.content.hostname,
+                name: slotProps.entry.content.name,
+                connection: slotProps.entry.content.connection,
+                queue: slotProps.entry.content.queue,
+                status: slotProps.entry.content.status
               }
             }
           }
@@ -10263,6 +10314,13 @@ var render = function render() {
               name: "mail-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                created_at: slotProps.entry.created_at,
+                hostname: slotProps.entry.content.hostname,
+                mailable: slotProps.entry.content.mailable,
+                subject: slotProps.entry.content.subject
               }
             }
           }
@@ -11177,6 +11235,14 @@ var render = function render() {
               name: "request-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                created_at: slotProps.entry.created_at,
+                hostname: slotProps.entry.content.hostname,
+                method: slotProps.entry.content.method,
+                uri: slotProps.entry.content.uri,
+                status: slotProps.entry.content.response_status
               }
             }
           }
@@ -11600,6 +11666,13 @@ var render = function render() {
               name: "view-preview",
               params: {
                 id: slotProps.entry.id
+              },
+              query: {
+                service: _vm.getCurrentService(),
+                created_at: slotProps.entry.created_at,
+                hostname: slotProps.entry.content.hostname,
+                name: slotProps.entry.content.name,
+                path: slotProps.entry.content.path
               }
             }
           }

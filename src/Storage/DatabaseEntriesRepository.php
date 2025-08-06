@@ -57,23 +57,11 @@ class DatabaseEntriesRepository implements Contract, ClearableRepository, Prunab
      * Find the entry with the given ID.
      *
      * @param  mixed  $id
-     * @param  string|null  $service
      * @return \Laravel\Telescope\EntryResult
      */
-    public function find($id, $service = null): EntryResult
+    public function find($id): EntryResult
     {
-        $query = EntryModel::on($this->connection)->whereUuid($id);
-        
-        // If service is specified, filter by service tag
-        if ($service) {
-            $query->whereExists(function ($subQuery) use ($id, $service) {
-                $subQuery->from('telescope_entries_tags')
-                         ->where('entry_uuid', $id)
-                         ->where('tag', $service);
-            });
-        }
-        
-        $entry = $query->firstOrFail();
+        $entry = EntryModel::on($this->connection)->whereUuid($id)->firstOrFail();
 
         $tags = $this->table('telescope_entries_tags')
                         ->where('entry_uuid', $id)

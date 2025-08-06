@@ -3,7 +3,6 @@
 namespace Laravel\Telescope\Http\Controllers;
 
 use Illuminate\Bus\BatchRepository;
-use Illuminate\Http\Request;
 use Laravel\Telescope\Contracts\EntriesRepository;
 use Laravel\Telescope\EntryType;
 use Laravel\Telescope\EntryUpdate;
@@ -35,14 +34,12 @@ class QueueBatchesController extends EntryController
     /**
      * Get an entry with the given ID.
      *
-     * @param  \Illuminate\Http\Request  $request
      * @param  \Laravel\Telescope\Contracts\EntriesRepository  $storage
      * @param  int  $id
      * @return \Illuminate\Http\JsonResponse
      */
-    public function show(Request $request, EntriesRepository $storage, $id)
+    public function show(EntriesRepository $storage, $id)
     {
-        $service = $request->get('service');
         $batch = app(BatchRepository::class)->find($id);
 
         $storage->update(collect([
@@ -51,16 +48,11 @@ class QueueBatchesController extends EntryController
             ),
         ]));
 
-        $entry = $storage->find($id, $service)->generateAvatar();
-
-        $batchOptions = EntryQueryOptions::forBatchId($entry->batchId)->limit(-1);
-        if ($service) {
-            $batchOptions->serviceTag($service);
-        }
+        $entry = $storage->find($id)->generateAvatar();
 
         return response()->json([
             'entry' => $entry,
-            'batch' => $storage->get(null, $batchOptions),
+            'batch' => $storage->get(null, EntryQueryOptions::forBatchId($entry->batchId)->limit(-1)),
         ]);
     }
 }

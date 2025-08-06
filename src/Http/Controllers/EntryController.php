@@ -44,24 +44,17 @@ abstract class EntryController extends Controller
     /**
      * Get an entry with the given ID.
      *
-     * @param  \Illuminate\Http\Request  $request
      * @param  \Laravel\Telescope\Contracts\EntriesRepository  $storage
      * @param  int  $id
      * @return \Illuminate\Http\JsonResponse
      */
-    public function show(Request $request, EntriesRepository $storage, $id)
+    public function show(EntriesRepository $storage, $id)
     {
-        $service = $request->get('service');
-        $entry = $storage->find($id, $service)->generateAvatar();
-
-        $batchOptions = EntryQueryOptions::forBatchId($entry->batchId)->limit(-1);
-        if ($service) {
-            $batchOptions->serviceTag($service);
-        }
+        $entry = $storage->find($id)->generateAvatar();
 
         return response()->json([
             'entry' => $entry,
-            'batch' => $storage->get(null, $batchOptions),
+            'batch' => $storage->get(null, EntryQueryOptions::forBatchId($entry->batchId)->limit(-1)),
         ]);
     }
 

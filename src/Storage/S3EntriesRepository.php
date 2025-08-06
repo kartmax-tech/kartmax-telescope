@@ -198,50 +198,23 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
         })->take($options->limit)->values();
     }
 
-    public function find($id, $service = null): EntryResult
+    public function find($id): EntryResult
     {
-        // If service is specified, look in service-specific paths
-        if ($service) {
-            // Look in the last 5 days for the specific service
-            $datesToCheck = collect(range(0, 4))
-                ->map(fn($daysAgo) => now()->subDays($daysAgo)->format('Y-m-d'));
+        // Look in the last 5 days
+        $datesToCheck = collect(range(0, 4))
+            ->map(fn($daysAgo) => now()->subDays($daysAgo)->format('Y-m-d'));
 
-            foreach ($datesToCheck as $date) {
-                // Look in service-specific directory structure: {type}/{service}/{date}/{hour}/{minute}
-                $serviceBasePath = "{$this->directory}/*/{$service}/{$date}";
-                $files = Storage::disk($this->disk)->allFiles($serviceBasePath);
-                
-                foreach ($files as $file) {
-                    if (str_ends_with($file, "/{$id}.json")) {
-                        try {
-                            $data = json_decode(Storage::disk($this->disk)->get($file), true);
-                            return $this->toEntryResult($data, $file);
-                        } catch (\Exception $e) {
-                            Log::warning("Failed to read Telescope entry: {$id}", [
-                                'service' => $service,
-                                'error' => $e->getMessage()
-                            ]);
-                        }
-                    }
-                }
-            }
-        } else {
-            // Fallback: Look across all services (legacy behavior)
-            $datesToCheck = collect(range(0, 4))
-                ->map(fn($daysAgo) => now()->subDays($daysAgo)->format('Y-m-d'));
-
-            foreach ($datesToCheck as $date) {
-                $files = Storage::disk($this->disk)->allFiles($this->directory);
-                foreach ($files as $file) {
-                    if (str_ends_with($file, "/{$id}.json")) {
-                        try {
-                            $data = json_decode(Storage::disk($this->disk)->get($file), true);
-                            return $this->toEntryResult($data, $file);
-                        } catch (\Exception $e) {
-                            Log::warning("Failed to read Telescope entry: {$id}", [
-                                'error' => $e->getMessage()
-                            ]);
-                        }
+        foreach ($datesToCheck as $date) {
+            $files = Storage::disk($this->disk)->allFiles($this->directory);
+            foreach ($files as $file) {
+                if (str_ends_with($file, "/{$id}.json")) {
+                    try {
+                        $data = json_decode(Storage::disk($this->disk)->get($file), true);
+                        return $this->toEntryResult($data, $file);
+                    } catch (\Exception $e) {
+                        Log::warning("Failed to read Telescope entry: {$id}", [
+                            'error' => $e->getMessage()
+                        ]);
                     }
                 }
             }
