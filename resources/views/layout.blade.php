@@ -64,7 +64,7 @@
             </router-link>
 
             <!-- Service Selector Dropdown -->
-            <div class="dropdown">
+            <div class="dropdown" style="display: none;">
                 <button class="btn btn-primary dropdown-toggle d-flex align-items-center py-2" 
                         type="button" 
                         id="serviceDropdown" 
