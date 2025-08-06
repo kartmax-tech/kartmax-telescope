@@ -5332,28 +5332,14 @@ __webpack_require__.r(__webpack_exports__);
       var _this2 = this;
       var selectedService = this.getCurrentService();
 
-      // Build query parameters from route query
+      // Build query parameters - only include essential parameters
       var queryParams = {
         service: selectedService
       };
 
-      // Add context parameters from the route query if available
-      if (this.$route.query) {
-        if (this.$route.query.created_at) queryParams.created_at = this.$route.query.created_at;
-        if (this.$route.query.hostname) queryParams.hostname = this.$route.query.hostname;
-        if (this.$route.query.method) queryParams.method = this.$route.query.method;
-        if (this.$route.query.uri) queryParams.uri = this.$route.query.uri;
-        if (this.$route.query.status) queryParams.status = this.$route.query.status;
-        if (this.$route.query.name) queryParams.name = this.$route.query.name;
-        if (this.$route.query.connection) queryParams.connection = this.$route.query.connection;
-        if (this.$route.query.queue) queryParams.queue = this.$route.query.queue;
-        if (this.$route.query["class"]) queryParams["class"] = this.$route.query["class"];
-        if (this.$route.query.message) queryParams.message = this.$route.query.message;
-        if (this.$route.query.mailable) queryParams.mailable = this.$route.query.mailable;
-        if (this.$route.query.subject) queryParams.subject = this.$route.query.subject;
-        if (this.$route.query.broadcast) queryParams.broadcast = this.$route.query.broadcast;
-        if (this.$route.query.path) queryParams.path = this.$route.query.path;
-        if (this.$route.query.file_path) queryParams.file_path = this.$route.query.file_path;
+      // Add file_path for S3 direct access optimization if available
+      if (this.$route.query && this.$route.query.file_path) {
+        queryParams.file_path = this.$route.query.file_path;
       }
 
       // Convert to URL query string
@@ -9054,10 +9040,6 @@ var render = function render() {
               },
               query: {
                 service: _vm.getCurrentService(),
-                created_at: slotProps.entry.created_at,
-                hostname: slotProps.entry.content.hostname,
-                name: slotProps.entry.content.name,
-                broadcast: slotProps.entry.content.broadcast,
                 file_path: slotProps.entry.file_path
               }
             }
@@ -9296,10 +9278,6 @@ var render = function render() {
               },
               query: {
                 service: _vm.getCurrentService(),
-                created_at: slotProps.entry.created_at,
-                hostname: slotProps.entry.content.hostname,
-                "class": slotProps.entry.content["class"],
-                message: slotProps.entry.content.message,
                 file_path: slotProps.entry.file_path
               }
             }
@@ -9823,12 +9801,6 @@ var render = function render() {
               },
               query: {
                 service: _vm.getCurrentService(),
-                created_at: slotProps.entry.created_at,
-                hostname: slotProps.entry.content.hostname,
-                name: slotProps.entry.content.name,
-                connection: slotProps.entry.content.connection,
-                queue: slotProps.entry.content.queue,
-                status: slotProps.entry.content.status,
                 file_path: slotProps.entry.file_path
               }
             }
@@ -10321,10 +10293,6 @@ var render = function render() {
               },
               query: {
                 service: _vm.getCurrentService(),
-                created_at: slotProps.entry.created_at,
-                hostname: slotProps.entry.content.hostname,
-                mailable: slotProps.entry.content.mailable,
-                subject: slotProps.entry.content.subject,
                 file_path: slotProps.entry.file_path
               }
             }
@@ -11243,11 +11211,6 @@ var render = function render() {
               },
               query: {
                 service: _vm.getCurrentService(),
-                created_at: slotProps.entry.created_at,
-                hostname: slotProps.entry.content.hostname,
-                method: slotProps.entry.content.method,
-                uri: slotProps.entry.content.uri,
-                status: slotProps.entry.content.response_status,
                 file_path: slotProps.entry.file_path
               }
             }
@@ -11675,10 +11638,6 @@ var render = function render() {
               },
               query: {
                 service: _vm.getCurrentService(),
-                created_at: slotProps.entry.created_at,
-                hostname: slotProps.entry.content.hostname,
-                name: slotProps.entry.content.name,
-                path: slotProps.entry.content.path,
                 file_path: slotProps.entry.file_path
               }
             }

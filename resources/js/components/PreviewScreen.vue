@@ -95,28 +95,14 @@
             loadEntry(after){
                 const selectedService = this.getCurrentService();
                 
-                // Build query parameters from route query
+                // Build query parameters - only include essential parameters
                 let queryParams = {
                     service: selectedService
                 };
                 
-                // Add context parameters from the route query if available
-                if (this.$route.query) {
-                    if (this.$route.query.created_at) queryParams.created_at = this.$route.query.created_at;
-                    if (this.$route.query.hostname) queryParams.hostname = this.$route.query.hostname;
-                    if (this.$route.query.method) queryParams.method = this.$route.query.method;
-                    if (this.$route.query.uri) queryParams.uri = this.$route.query.uri;
-                    if (this.$route.query.status) queryParams.status = this.$route.query.status;
-                    if (this.$route.query.name) queryParams.name = this.$route.query.name;
-                    if (this.$route.query.connection) queryParams.connection = this.$route.query.connection;
-                    if (this.$route.query.queue) queryParams.queue = this.$route.query.queue;
-                    if (this.$route.query.class) queryParams.class = this.$route.query.class;
-                    if (this.$route.query.message) queryParams.message = this.$route.query.message;
-                    if (this.$route.query.mailable) queryParams.mailable = this.$route.query.mailable;
-                    if (this.$route.query.subject) queryParams.subject = this.$route.query.subject;
-                    if (this.$route.query.broadcast) queryParams.broadcast = this.$route.query.broadcast;
-                    if (this.$route.query.path) queryParams.path = this.$route.query.path;
-                    if (this.$route.query.file_path) queryParams.file_path = this.$route.query.file_path;
+                // Add file_path for S3 direct access optimization if available
+                if (this.$route.query && this.$route.query.file_path) {
+                    queryParams.file_path = this.$route.query.file_path;
                 }
                 
                 // Convert to URL query string
