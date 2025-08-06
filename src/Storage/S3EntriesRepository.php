@@ -200,6 +200,23 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
 
     public function find($id): EntryResult
     {
+        // If a file path is provided via query parameter, use direct access
+        $filePath = request()->query('file_path');
+        
+        if ($filePath && Storage::disk($this->disk)->exists($filePath)) {
+            try {
+                $data = json_decode(Storage::disk($this->disk)->get($filePath), true);
+                return $this->toEntryResult($data, $filePath);
+            } catch (\Exception $e) {
+                Log::warning("Failed to read Telescope entry via direct path: {$id}", [
+                    'file_path' => $filePath,
+                    'error' => $e->getMessage()
+                ]);
+                // Fall through to traditional search if direct access fails
+            }
+        }
+
+        // Traditional search method (fallback)
         // Look in the last 5 days
         $datesToCheck = collect(range(0, 4))
             ->map(fn($daysAgo) => now()->subDays($daysAgo)->format('Y-m-d'));
@@ -321,7 +338,8 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
             $data['family_hash'] ?? null,
             $data['content'] ?? [],
             Carbon::parse($data['created_at'] ?? now()),
-            $data['tags'] ?? []
+            $data['tags'] ?? [],
+            $file // Pass the full file path for direct access
         );
     }
 } 

@@ -116,6 +116,7 @@
                     if (this.$route.query.subject) queryParams.subject = this.$route.query.subject;
                     if (this.$route.query.broadcast) queryParams.broadcast = this.$route.query.broadcast;
                     if (this.$route.query.path) queryParams.path = this.$route.query.path;
+                    if (this.$route.query.file_path) queryParams.file_path = this.$route.query.file_path;
                 }
                 
                 // Convert to URL query string

@@ -5353,6 +5353,7 @@ __webpack_require__.r(__webpack_exports__);
         if (this.$route.query.subject) queryParams.subject = this.$route.query.subject;
         if (this.$route.query.broadcast) queryParams.broadcast = this.$route.query.broadcast;
         if (this.$route.query.path) queryParams.path = this.$route.query.path;
+        if (this.$route.query.file_path) queryParams.file_path = this.$route.query.file_path;
       }
 
       // Convert to URL query string
@@ -9056,7 +9057,8 @@ var render = function render() {
                 created_at: slotProps.entry.created_at,
                 hostname: slotProps.entry.content.hostname,
                 name: slotProps.entry.content.name,
-                broadcast: slotProps.entry.content.broadcast
+                broadcast: slotProps.entry.content.broadcast,
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -9297,7 +9299,8 @@ var render = function render() {
                 created_at: slotProps.entry.created_at,
                 hostname: slotProps.entry.content.hostname,
                 "class": slotProps.entry.content["class"],
-                message: slotProps.entry.content.message
+                message: slotProps.entry.content.message,
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -9825,7 +9828,8 @@ var render = function render() {
                 name: slotProps.entry.content.name,
                 connection: slotProps.entry.content.connection,
                 queue: slotProps.entry.content.queue,
-                status: slotProps.entry.content.status
+                status: slotProps.entry.content.status,
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -10320,7 +10324,8 @@ var render = function render() {
                 created_at: slotProps.entry.created_at,
                 hostname: slotProps.entry.content.hostname,
                 mailable: slotProps.entry.content.mailable,
-                subject: slotProps.entry.content.subject
+                subject: slotProps.entry.content.subject,
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -11242,7 +11247,8 @@ var render = function render() {
                 hostname: slotProps.entry.content.hostname,
                 method: slotProps.entry.content.method,
                 uri: slotProps.entry.content.uri,
-                status: slotProps.entry.content.response_status
+                status: slotProps.entry.content.response_status,
+                file_path: slotProps.entry.file_path
               }
             }
           }
@@ -11672,7 +11678,8 @@ var render = function render() {
                 created_at: slotProps.entry.created_at,
                 hostname: slotProps.entry.content.hostname,
                 name: slotProps.entry.content.name,
-                path: slotProps.entry.content.path
+                path: slotProps.entry.content.path,
+                file_path: slotProps.entry.file_path
               }
             }
           }

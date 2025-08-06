@@ -63,6 +63,13 @@ class EntryResult implements JsonSerializable
     private $tags;
 
     /**
+     * The file path for the entry (used for S3 direct access).
+     *
+     * @var string|null
+     */
+    public $filePath;
+
+    /**
      * The generated URL to the entry user's avatar.
      *
      * @var string
@@ -80,8 +87,9 @@ class EntryResult implements JsonSerializable
      * @param  array  $content
      * @param  \Carbon\CarbonInterface|\Carbon\Carbon  $createdAt
      * @param  array  $tags
+     * @param  string|null  $filePath
      */
-    public function __construct($id, $sequence, string $batchId, string $type, ?string $familyHash, array $content, $createdAt, $tags = [])
+    public function __construct($id, $sequence, string $batchId, string $type, ?string $familyHash, array $content, $createdAt, $tags = [], $filePath = null)
     {
         $this->id = $id;
         $this->type = $type;
@@ -91,6 +99,7 @@ class EntryResult implements JsonSerializable
         $this->sequence = $sequence;
         $this->createdAt = $createdAt;
         $this->familyHash = $familyHash;
+        $this->filePath = $filePath;
     }
 
     /**
@@ -122,6 +131,7 @@ class EntryResult implements JsonSerializable
             'tags' => $this->tags,
             'family_hash' => $this->familyHash,
             'created_at' => $this->createdAt->toDateTimeString(),
+            'file_path' => $this->filePath,
         ])->when($this->avatar, function ($items) {
             return $items->mergeRecursive([
                 'content' => [
