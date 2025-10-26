@@ -5,60 +5,44 @@ namespace Laravel\Telescope\Storage;
 use DateTimeInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Laravel\Telescope\Contracts\ClearableRepository;
 use Laravel\Telescope\Contracts\EntriesRepository as Contract;
 use Laravel\Telescope\Contracts\PrunableRepository;
 use Laravel\Telescope\Contracts\TerminableRepository;
 use Laravel\Telescope\EntryResult;
-use Laravel\Telescope\IncomingEntry;
-use Laravel\Telescope\EntryUpdate;
 use Laravel\Telescope\Storage\EntryQueryOptions;
 use Carbon\Carbon;
-use Aws\S3\S3Client;
-use Illuminate\Support\Facades\Log;
-use Laravel\Telescope\Storage\S3DailyStatsService;
 
+/**
+ * Example Telescope repository that emits entries to stdout as JSON lines.
+ * Your Lambda Logs API extension will receive these and upload to S3 using the provided s3_key.
+ */
 class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepository, TerminableRepository
 {
     protected $disk;
     protected $directory;
     protected $monitoredTags;
     protected $monitoredTagsFile = 'monitored-tags.json';
-    protected $s3Client;
-    protected $statsService;
 
-    public function __construct(string $disk, string $directory, ?S3DailyStatsService $statsService = null)
+    public function __construct(string $disk, string $directory)
     {
         $this->disk = $disk;
         $this->directory = trim($directory, '/');
         $this->monitoredTagsFile = $this->directory . '/' . $this->monitoredTagsFile;
-        $this->statsService = $statsService ?? app(S3DailyStatsService::class);
-        
-        // Initialize standard AWS S3 client
-        $this->s3Client = new S3Client([
-            'version' => 'latest',
-            'region'  => config('filesystems.disks.' . $disk . '.region'),
-            'credentials' => [
-                'key'    => config('filesystems.disks.' . $disk . '.key'),
-                'secret' => config('filesystems.disks.' . $disk . '.secret'),
-            ]
-        ]);
     }
 
     protected function getServiceTag($entry = null)
     {
-        // Get from entry tags if available
-        if ($entry && isset($entry->tags)) {
-            $staticTag = config('telescope.custom_static_tag');
+        $staticTag = config('telescope.custom_static_tag');
+        if ($entry && isset($entry->tags) && is_array($entry->tags)) {
             foreach ($entry->tags as $tag) {
-                if (strpos($tag, $staticTag . ':') === 0) {
+                if ($staticTag && strpos($tag, $staticTag . ':') === 0) {
                     return str_replace($staticTag . ':', '', $tag);
                 }
             }
         }
-        
-        // Fallback to config or default
-        return config('telescope.custom_static_tag', 'default-service');
+        return config('telescope.custom_static_tag', config('app.name', 'laravel'));
     }
 
     protected function entryPath($type, $batchId, $uuid, $entry = null)
@@ -66,13 +50,12 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
         $now = now()->setTimezone('Asia/Kolkata');
         $serviceTag = $this->getServiceTag($entry);
         $date = $now->format('Y-m-d');
-        $hour = $now->format('H'); // 24-hour format (00-23)
-        
-        // Round to nearest 5-minute interval
+        $hour = $now->format('H');
+
         $currentMinute = intval($now->format('i'));
         $roundedMinute = intval($currentMinute / 5) * 5;
         $minute = sprintf('%02d', $roundedMinute);
-        
+
         return "{$this->directory}/{$type}/{$serviceTag}/{$date}/{$hour}/{$minute}/{$uuid}.json";
     }
 
@@ -83,14 +66,10 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
         }
 
         foreach ($entries as $entry) {
-            // Pass the entry to entryPath to extract service tag
             $filePath = $this->entryPath($entry->type, $entry->batchId, $entry->uuid, $entry);
-            
-            // Add service tag to entry data
             $serviceTag = $this->getServiceTag($entry);
-            
-            // Build complete entry data
-            $entryData = [
+
+            $payload = [
                 'uuid' => $entry->uuid,
                 'batch_id' => $entry->batchId,
                 'type' => $entry->type,
@@ -99,28 +78,21 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
                 'content' => $entry->content,
                 'created_at' => $entry->recordedAt->toISOString(),
                 'tags' => $entry->tags ?: [],
+                's3_key' => $filePath,
             ];
-            
-            try {
-                // Use standard S3 putObject
-                $this->s3Client->putObject([
-                    'Bucket' => config('filesystems.disks.' . $this->disk . '.bucket'),
-                    'Key' => $filePath,
-                    'Body' => json_encode($entryData, JSON_PRETTY_PRINT),
-                    'ContentType' => 'application/json',
-                ]);
 
-                // Increment stats for this entry type
-                if ($this->statsService) {
-                    $this->statsService->increment($entry->type);
+            try {
+                // Emit JSON object to stdout for Lumigo APM extension
+                $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
+                if ($json !== false) {
+                    file_put_contents('php://stdout', $json . PHP_EOL);
                 }
-            } catch (\Exception $e) {
-                // Log error but don't fail the application
-                Log::warning('Failed to store Telescope entry', [
+            } catch (\Throwable $e) {
+                Log::warning('Failed to emit Telescope entry to stdout', [
                     'error' => $e->getMessage(),
                     'entry_type' => $entry->type,
                     'service_tag' => $serviceTag,
-                    'uuid' => $entry->uuid
+                    'uuid' => $entry->uuid,
                 ]);
             }
         }
@@ -128,62 +100,50 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
 
     public function get($type, EntryQueryOptions $options)
     {
-        // Require service to be specified - throw exception if missing
         if (!isset($options->serviceTag) || empty($options->serviceTag)) {
             throw new \InvalidArgumentException('Service selection required. Please select a service to view logs.');
         }
 
         $results = collect();
         $serviceTag = $options->serviceTag;
-        
-        // Determine time range to scan
+
         $timeSlots = collect();
-        
         if ($options->fromDateTime && $options->toDateTime) {
-            // Use specific datetime range with 5-minute intervals (convert to Asia/Kolkata)
             $fromDate = Carbon::parse($options->fromDateTime)->setTimezone('Asia/Kolkata');
             $toDate = Carbon::parse($options->toDateTime)->setTimezone('Asia/Kolkata');
-            
-            // Round down to nearest 5-minute interval for start
+
             $current = $fromDate->copy();
             $currentMinute = intval($current->format('i'));
             $roundedMinute = intval($currentMinute / 5) * 5;
             $current->minute($roundedMinute)->second(0);
-            
-            // Generate time slots for each 5-minute interval in the range
+
             while ($current->lessThanOrEqualTo($toDate)) {
                 $timeSlots->push([
                     'date' => $current->format('Y-m-d'),
-                    'hour' => $current->format('H'), // 24-hour format
+                    'hour' => $current->format('H'),
                     'minute' => sprintf('%02d', $current->minute)
                 ]);
                 $current->addMinutes(5);
             }
         } else {
-            // Fallback to time range with 5-minute intervals (default: last 30 minutes, Asia/Kolkata time)
             $minutesToScan = $options->timeRange ?? 30;
             $fiveMinuteSlots = ceil($minutesToScan / 5);
-            
             for ($i = 0; $i < $fiveMinuteSlots; $i++) {
                 $time = now()->setTimezone('Asia/Kolkata')->subMinutes($i * 5);
-                // Round down to nearest 5-minute interval
                 $minute = intval($time->format('i'));
                 $roundedMinute = intval($minute / 5) * 5;
                 $time->minute($roundedMinute);
-                
                 $timeSlots->push([
                     'date' => $time->format('Y-m-d'),
-                    'hour' => $time->format('H'), // 24-hour format
+                    'hour' => $time->format('H'),
                     'minute' => sprintf('%02d', $time->minute)
                 ]);
             }
         }
 
-        // Build the base path with service tag
         $basePath = "{$this->directory}/{$type}/{$serviceTag}";
 
         foreach ($timeSlots as $timeSlot) {
-            // If we have enough results, break early
             if ($results->count() >= $options->limit) {
                 break;
             }
@@ -196,61 +156,51 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
                 }
 
                 $files = Storage::disk($this->disk)->allFiles($timePath);
-
-                // Process files for this time slot
                 foreach ($files as $file) {
                     if (!str_ends_with($file, '.json')) {
                         continue;
                     }
-
                     if ($results->count() >= $options->limit) {
                         break;
                     }
-
                     $data = json_decode(Storage::disk($this->disk)->get($file), true);
-                    
                     if ($this->matchesOptions($data, $options)) {
                         $results->push($this->toEntryResult($data, $file));
                     }
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 Log::warning('Failed to retrieve Telescope entries', [
                     'time_path' => $timePath,
                     'type' => $type,
                     'service_tag' => $serviceTag,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]);
                 continue;
             }
         }
 
-        return $results->sortByDesc(function($entry) {
+        return $results->sortByDesc(function ($entry) {
             return $entry->sequence ?? ($entry->createdAt ? $entry->createdAt->timestamp : 0);
         })->take($options->limit)->values();
     }
 
     public function find($id): EntryResult
     {
-        // If a file path is provided via query parameter, use direct access
         $filePath = request()->query('file_path');
-        
         if ($filePath && Storage::disk($this->disk)->exists($filePath)) {
             try {
                 $data = json_decode(Storage::disk($this->disk)->get($filePath), true);
                 return $this->toEntryResult($data, $filePath);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 Log::warning("Failed to read Telescope entry via direct path: {$id}", [
                     'file_path' => $filePath,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]);
-                // Fall through to traditional search if direct access fails
             }
         }
 
-        // Traditional search method (fallback)
-        // Look in the last 5 days
         $datesToCheck = collect(range(0, 4))
-            ->map(fn($daysAgo) => now()->subDays($daysAgo)->format('Y-m-d'));
+            ->map(fn ($daysAgo) => now()->subDays($daysAgo)->format('Y-m-d'));
 
         foreach ($datesToCheck as $date) {
             $files = Storage::disk($this->disk)->allFiles($this->directory);
@@ -259,21 +209,21 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
                     try {
                         $data = json_decode(Storage::disk($this->disk)->get($file), true);
                         return $this->toEntryResult($data, $file);
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
                         Log::warning("Failed to read Telescope entry: {$id}", [
-                            'error' => $e->getMessage()
+                            'error' => $e->getMessage(),
                         ]);
                     }
                 }
             }
         }
-        
+
         abort(404, 'Entry not found');
     }
 
     public function update(Collection $updates)
     {
-        return null; // S3 implementation doesn't support updates
+        return null;
     }
 
     public function loadMonitoredTags()
@@ -323,8 +273,8 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
     public function prune(DateTimeInterface $before)
     {
         $deleted = 0;
-        $datesToCheck = collect(range(0, 30)) // Check up to 30 days back
-            ->map(fn($daysAgo) => now()->subDays($daysAgo)->format('Y-m-d'));
+        $datesToCheck = collect(range(0, 30))
+            ->map(fn ($daysAgo) => now()->subDays($daysAgo)->format('Y-m-d'));
 
         foreach ($datesToCheck as $date) {
             $dateTimestamp = Carbon::parse($date)->timestamp;
@@ -370,7 +320,7 @@ class S3EntriesRepository implements Contract, ClearableRepository, PrunableRepo
             $data['content'] ?? [],
             Carbon::parse($data['created_at'] ?? now()),
             $data['tags'] ?? [],
-            $file // Pass the full file path for direct access
+            $file
         );
     }
-} 
+}
